@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "wx_sync"
+version = "0.0.1"
+description = "A tool to sync articles to WeChat."
+authors = ["qiaoliang <qiaoliang.email@gmail.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+requests = "^2.25.1"
+markdown = "^3.3.4"
+pyquery = "^1.4.3"
+werobot = "^1.10.0"
+pygments = "^2.19.1"
+
+[poetry.group.dev.dependencies]
+pytest = "^6.2.4"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[[tool.poetry.packages]]
+# Specify the package directory
+include = "wx_sync"
