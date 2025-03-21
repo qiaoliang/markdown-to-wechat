@@ -1,25 +1,65 @@
 [tool.poetry]
-name = "wx_sync"
-version = "0.0.1"
-description = "A tool to sync articles to WeChat."
-authors = ["qiaoliang <qiaoliang.email@gmail.com>"]
-license = "MIT"
+name = "wx"
+version = "0.1.0"
+description = "Upload markdown files to WeChat Official Account"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+packages = [{include = "wx"}]
 
 [tool.poetry.dependencies]
-python = "^3.8"
-requests = "^2.25.1"
+python = "^3.9"
 markdown = "^3.3.4"
-pyquery = "^1.4.3"
-werobot = "^1.10.0"
-pygments = "^2.19.1"
+werobot = "^1.13.1"
+pyquery = "^2.0.0"
+requests = "^2.31.0"
+python-dotenv = "^1.0.0"
+pillow = "^11.1.0"
 
-[poetry.group.dev.dependencies]
-pytest = "^6.2.4"
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+black = "^24.1.1"
+pytest-cov = "^6.0.0"
+pytest-mock = "^3.12.0"
+
+[tool.poetry.scripts]
+wx = "wx.cli:main"
+test = "pytest:main"
+format = "black:main"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
-[[tool.poetry.packages]]
-# Specify the package directory
-include = "wx_sync"
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = """
+    --cov=wx
+    --cov-report=term-missing
+    --cov-report=html
+    --cov-branch
+    --no-cov-on-fail
+"""
+
+[tool.coverage.run]
+branch = true
+source = ["wx"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "pass",
+    "raise ImportError",
+]
+ignore_errors = true
+omit = [
+    "tests/*",
+    "setup.py",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"

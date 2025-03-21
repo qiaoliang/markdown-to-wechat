@@ -1,4 +1,11 @@
-*.html
+.coverage
+htmlcov
+**/.DS_*
+**/temp/
+.vscode/
+poetry.lock
+**/__pycache__/
+**/*.html
 blog-source
 code2img
 cache.txt
