@@ -40,6 +40,7 @@ class WxPublisher:
         if self.cache.get(md_file.abs_path):
             print(f"Skipping published article: {md_file.abs_path}")
             return None
+        # 如果文章有未上传的图片，则使用临时图片
         if md_file.get_imgRefs().count(lambda x: not x.existed) > 0:
             md_file.use_temp_img_for_unavailable_img()
         # 1. 处理图片
@@ -60,7 +61,9 @@ class WxPublisher:
             # 如果文章没有图片，使用默认的缩略图
             if not md_file.uploaded_images:
                 md_file.uploaded_images["assets/default_thumb.png"] = [
-                    "default_media_id", "default_url"]
+                    "default_media_id",
+                    "default_url",
+                ]
                 thumb_media_id = "default_media_id"
             else:
                 raise ValueError(

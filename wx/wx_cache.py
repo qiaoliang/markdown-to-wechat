@@ -37,6 +37,7 @@ class WxCache:
             return self.CACHE[key]
         return None
 
+    # 保存上传的图片的media_id 和 Media_url
     def set(self, file_path, media_id, media_url):
         digest = self.__file_digest(file_path)
         self.CACHE[digest] = [media_id, media_url]
@@ -46,9 +47,10 @@ class WxCache:
         digest = self.__file_digest(file_path)
         return self.__get(digest)
 
-    def update(self, file_path, media_id):
+    # 更新上传的文章的media_id, 并不保存Media_url
+    def update(self, file_path, media_id, media_url=None):
         digest = self.__file_digest(file_path)
-        self.CACHE[digest] = "{}:{}".format(file_path, media_id)
+        self.CACHE[digest] = [media_id, media_url]
         self.dump_cache()
 
     def __file_digest(self, file_path):

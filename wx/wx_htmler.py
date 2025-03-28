@@ -128,8 +128,7 @@ class WxHtmler:
     def _format_fix(self, content: str) -> str:
         """修复其他格式问题"""
         content = content.replace("</li>", "</li>\n<p></p>")
-        content = content.replace(
-            "background: #272822", self._gen_css("code"))
+        content = content.replace("background: #272822", self._gen_css("code"))
         content = content.replace(
             """<pre style="line-height: 125%">""",
             """<pre style="line-height: 125%; color: white; font-size: 11px;">""",

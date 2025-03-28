@@ -102,9 +102,9 @@ class TestWxHtmler:
             '<img alt="local image" src="./assets/exists.png" />',
             '<img alt="unexisted image" src="./unexists.png" />',
             '<a href="https://example.com">another page</a>',
-            '<blockquote>',
-            '<p>This is a blockquote.</p>',
-            '</blockquote>',
+            "<blockquote>",
+            "<p>This is a blockquote.</p>",
+            "</blockquote>",
         ]
         html = wx_htmler.md_to_original_html(
             sample_md_file.body.body_text, sample_md_file.uploaded_images
@@ -208,7 +208,7 @@ class TestWxHtmler:
         content = "![alt text](image1.jpg) and ![alt text](image2.png)"
         uploaded_images = {
             "image1.jpg": ("thumb1", "https://example.com/image1.jpg"),
-            "image2.png": ("thumb2", "https://example.com/image2.png")
+            "image2.png": ("thumb2", "https://example.com/image2.png"),
         }
         expected = "![alt text](https://example.com/image1.jpg) and ![alt text](https://example.com/image2.png)"
         assert htmler.update_image_urls(content, uploaded_images) == expected
@@ -235,7 +235,7 @@ class TestWxHtmler:
         content = "![alt text](image-1.jpg) ![alt text](image_2.png)"
         uploaded_images = {
             "image-1.jpg": ("thumb1", "https://example.com/image-1.jpg"),
-            "image_2.png": ("thumb2", "https://example.com/image_2.png")
+            "image_2.png": ("thumb2", "https://example.com/image_2.png"),
         }
         expected = "![alt text](https://example.com/image-1.jpg) ![alt text](https://example.com/image_2.png)"
         assert htmler.update_image_urls(content, uploaded_images) == expected
@@ -250,7 +250,7 @@ More text
         uploaded_images = {
             "image1.jpg": ("thumb1", "https://example.com/image1.jpg"),
             "image2.png": ("thumb2", "https://example.com/image2.png"),
-            "image3.gif": ("thumb3", "https://example.com/image3.gif")
+            "image3.gif": ("thumb3", "https://example.com/image3.gif"),
         }
         expected = """# Sample Title
 ![First Image](https://example.com/image1.jpg)

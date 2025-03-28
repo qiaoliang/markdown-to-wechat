@@ -80,7 +80,7 @@ def test_update(temp_dir):
     # 验证缓存已更新
     digest = cache._WxCache__file_digest(str(test_file))
     assert digest in cache.CACHE
-    assert cache.CACHE[digest] == f"{str(test_file)}:{test_media_id}"
+    assert cache.CACHE[digest] == [test_media_id, None]
 
 
 def test_is_cached(temp_dir):

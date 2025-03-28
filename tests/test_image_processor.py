@@ -31,16 +31,14 @@ def temp_test_dir(tmp_path):
         # 创建 assets 目录并复制图片
         assets_dir = os.path.join(tmp_path, "assets")
         os.makedirs(assets_dir, exist_ok=True)
-        shutil.copy2(os.path.join(
-            data_dir, "assets", "exists.png"), assets_dir)
+        shutil.copy2(os.path.join(data_dir, "assets", "exists.png"), assets_dir)
 
         # 创建 banner 目录并复制 banner.png
         banner_dir = os.path.join(assets_dir, "banner")
         os.makedirs(banner_dir, exist_ok=True)
         if os.path.exists(os.path.join(data_dir, "assets", "banner", "banner.png")):
             shutil.copy2(
-                os.path.join(data_dir, "assets", "banner",
-                             "banner.png"), banner_dir
+                os.path.join(data_dir, "assets", "banner", "banner.png"), banner_dir
             )
     else:
         print("项目根目录中 testdata 目录不存在")
@@ -55,8 +53,7 @@ def sample_md_file(temp_test_dir):
     md_file_path = temp_test_dir / md_file_name
 
     # 创建 MarkdownFile 对象
-    md_file = MarkdownFile(source_dir=str(
-        temp_test_dir), md_file_name=md_file_name)
+    md_file = MarkdownFile(source_dir=str(temp_test_dir), md_file_name=md_file_name)
     return md_file
 
 
@@ -127,7 +124,8 @@ def test_upload_image_success(image_processor, temp_test_dir):
     assert media_id == expected_media_id
     assert media_url == expected_media_url
     image_processor.client.upload_permanent_media.assert_called_once_with(
-        ANY, 'exists.png')
+        ANY, "exists.png"
+    )
 
 
 def test_upload_image_failure(image_processor, temp_test_dir):
@@ -143,3 +141,21 @@ def test_upload_image_failure(image_processor, temp_test_dir):
     # Assert
     assert media_id is None
     assert media_url is None
+
+
+def test_upload_image_when_cached(image_processor, temp_test_dir):
+    """测试当图片在缓存中时，直接使用缓存中的值而不重新上传"""
+    # Arrange
+    test_image_path = str(temp_test_dir / "assets" / "exists.png")
+    cached_media_id = "cached_media_id"
+    cached_media_url = "cached_media_url"
+    image_processor.cache.set(test_image_path, cached_media_id, cached_media_url)
+
+    # Act
+    media_id, media_url = image_processor._upload_image(test_image_path)
+
+    # Assert
+    assert media_id == cached_media_id
+    assert media_url == cached_media_url
+    # 验证没有调用 upload_permanent_media
+    image_processor.client.upload_permanent_media.assert_not_called()

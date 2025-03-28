@@ -94,10 +94,10 @@ class MarkdownHeader:
             return self.banner_imgRef
         banner_existed = False
         external = False
-        if (
-            self.banner == ""
-        ):  # 如果没有指定banner为空，则使用网络随机图片作为默认banner
+        # 确保有banner。如果banner为空，则使用网络随机图片作为默认banner
+        if not self.banner:
             self.banner = "https://picsum.photos/900/300"
+
         if self.banner.startswith("http"):  # 如果banner是网络图片，则设置external为True
             external = True
         # 如果banner是本地图片，则设置banner_existed为True
@@ -201,11 +201,13 @@ class MarkdownFile:
         self.__load_content()
 
     def get_imgRefs(self) -> List[ImageReference]:
-        if not self.image_pairs:  # find all image links in the body
-            self.image_pairs = self.body.get_imgRefs()
-            if self.header.banner:
-                banner_ref = self.header.get_banner_imgRef()
-                self.image_pairs.insert(0, banner_ref)
+        if self.image_pairs:  # 如果image_pairs已经初始化，则直接返回
+            return self.image_pairs
+        self.image_pairs = self.body.get_imgRefs()
+        banner_ref = self.header.get_banner_imgRef()
+        self.image_pairs.insert(0, banner_ref)  # 将banner插入到image_pairs的头部
+        if len(self.image_pairs) == 0:
+            raise ValueError("No image links found in the header and body")
         return self.image_pairs
 
     def __extract_header_and_body(self, content: str) -> Tuple[str, str]:
@@ -262,7 +264,7 @@ class MarkdownFile:
                 print(
                     f"Error downloading image {imgRef.url_in_text} from web: {e}")
                 continue
-            if (content):
+            if content:
                 imgRef.existed = True
                 f_name = "/tmp/{}".format(imgRef.url_in_text.split("/")[-1])
                 if "." not in f_name:

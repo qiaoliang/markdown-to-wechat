@@ -21,8 +21,7 @@ def create_wx_objects(
     if not root_dir:
         root_dir = os.getenv("CD20_ARTICLE_SOURCE")
         if not root_dir:
-            raise ValueError(
-                "CD20_ARTICLE_SOURCE environment variable must be set")
+            raise ValueError("CD20_ARTICLE_SOURCE environment variable must be set")
 
     cache = WxCache(root_dir=root_dir)
     publisher = WxPublisher(cache)
@@ -67,12 +66,10 @@ def gen_and_upload(source_dir: str, path: Path, publisher: WxPublisher) -> bool:
         try:
             media_id = publisher.publish_article(md_file)
             if media_id:
-                print(
-                    f"Successfully published {path_str}, media_id: {media_id}")
+                print(f"Successfully published {path_str}, media_id: {media_id}")
                 return True
             else:
-                print(
-                    f"Failed to publish {path_str}: {e}, some images are unavailable")
+                print(f"Failed to publish {path_str}: {e}, some images are unavailable")
                 return False
         except ValueError as e:
             print(f"Failed to publish {path_str}: {e}")

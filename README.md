@@ -127,16 +127,25 @@ poetry run black .
 
 项目包含以下测试模块：
 
-- `test_sync.py`: 测试文章同步功能
-  - 测试微信对象创建
-  - 测试环境变量配置
-  - 测试草稿文章处理
-  - 测试错误处理
 - `test_wx_cache.py`: 测试缓存功能
-- `test_wx_publisher.py`: 测试文章发布功能
-- `test_wx_htmler.py`: 测试 HTML 转换功能
+  - 测试文章和图片的缓存机制
+  - 测试缓存更新和清理
 - `test_image_processor.py`: 测试图片处理功能
-- `test_parse_md.py`: 测试 Markdown 解析功能
+  - 测试本地图片处理
+  - 测试网络图片下载和处理
+- `test_md_file.py`: 测试 Markdown 文件解析功能
+  - 测试 front matter 解析
+  - 测试文章内容解析
+- `test_wx_publisher.py`: 测试文章发布功能
+  - 测试文章上传
+  - 测试错误处理
+- `test_wx_htmler.py`: 测试 HTML 转换功能
+  - 测试 Markdown 到 HTML 的转换
+  - 测试样式处理
+- `tests/integration/test_wx_upload_stuffs.py`: 集成测试（被 Skip 注释了，可自行开启）
+  - 测试完整的文章上传流程
+  - 测试图片上传和关联
+  - 测试与微信公众号 API 的交互
 
 ## License
 
