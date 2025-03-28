@@ -37,9 +37,8 @@ class WxClient:
     def upload_article_draft(self, articles: Dict) -> str:
         token = self.get_access_token()
         headers = {"Content-type": "text/plain; charset=utf-8"}
-        data = {"articles": [articles]}
+        data = {"articles": articles}
         datas = json.dumps(data, ensure_ascii=False).encode("utf-8")
-        print(datas)
         postUrl = "https://api.weixin.qq.com/cgi-bin/draft/add?access_token=%s" % token
         r = requests.post(postUrl, data=datas, headers=headers)
         resp = json.loads(r.text)

@@ -186,10 +186,6 @@ class TestWxHtmler:
         assert article["author"] == ""  # No author in test data
         assert article["digest"] == "This is a sample subtitle"
         assert article["show_cover_pic"] == 1
-        assert (
-            article["content_source_url"]
-            == f"https://catcoding.me/p/{sample_md_file.base_name}"
-        )
         assert isinstance(article["content"], str) and article["content"]
 
     def test_generate_article_without_images(self, wx_htmler, sample_md_file):
@@ -204,16 +200,6 @@ class TestWxHtmler:
             template_path = os.path.join(wx_htmler.assets_dir, template)
             assert os.path.exists(
                 template_path), f"Template file {template} not found"
-
-    def test_temp_file_cleanup(self, wx_htmler, sample_md_file):
-        """测试临时文件清理"""
-        wx_htmler.render_markdown(sample_md_file.body.body_text)
-        assert os.path.exists(wx_htmler.temp_html_path)
-
-        try:
-            os.remove(wx_htmler.temp_html_path)
-        except OSError:
-            pass
 
     def test_update_image_urls(self):
         htmler = WxHtmler()

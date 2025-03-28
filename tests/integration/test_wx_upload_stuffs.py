@@ -195,7 +195,7 @@ This is section 2 with some text.
 
     # 发布文章
     print("\n=== Publishing Article ===")
-    media_id = wx_publisher.publish_article(md)
+    media_id = wx_publisher.publish_single_article(md)
 
     # 验证发布结果
     print("\n=== Publishing Results ===")
