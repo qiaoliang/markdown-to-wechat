@@ -33,8 +33,9 @@ poetry install
 export WECHAT_APP_ID="你的公众号 APP_ID"
 export WECHAT_APP_SECRET="你的公众号 APP_SECRET"
 
-# 可选：设置默认的文章源目录
-export WX_ARTICLE_MD_DIR="/path/to/your/markdown/files"
+# 必需：设置文章源目录（以下两种方式二选一）
+export CD20_ARTICLE_SOURCE="/path/to/your/markdown/files"  # 方式1
+export WX_ARTICLE_MD_DIR="/path/to/your/markdown/files"    # 方式2
 ```
 
 ### 2. Markdown 文件格式
@@ -75,11 +76,14 @@ poetry run python -m wx.sync -src /path/to/your/markdown/files
 ### 工作流程
 
 1. 程序会扫描指定目录下所有的 `.md` 文件
-2. 查找 draft = False 的所用 MD 文章。 
-3. 上传文章中的图片到微信素材库
-4. 转换 Markdown 为微信支持的 HTML 格式
-5. 上传文章到微信公众号草稿箱
-6. 缓存已处理的文章信息，避免重复上传
+2. 对每个文件进行处理：
+   - 跳过 draft = True 的草稿文章
+   - 下载文章中的网络图片到本地
+   - 处理文章中的图片（对不存在的图片使用默认图片）
+   - 上传文章中的图片到微信素材库
+   - 转换 Markdown 为微信支持的 HTML 格式
+   - 上传文章到微信公众号草稿箱
+   - 缓存已处理的文章信息，避免重复上传
 
 ### 注意事项
 

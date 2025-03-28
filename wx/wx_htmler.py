@@ -27,18 +27,12 @@ class WxHtmler:
         return html_content
 
     def __init__(self):
-        self.temp_html_path = "origi.html"
         self.assets_dir = "./assets"
         self.uploaded_images = {}
 
     def render_markdown(self, content: str, uploaded_images: dict = None) -> str:
         """渲染 Markdown 内容为 HTML"""
         html_content = self.md_to_original_html(content, uploaded_images)
-
-        # 保存临时 HTML 文件
-        with open(self.temp_html_path, "w", encoding="utf-8") as f:
-            f.write(html_content)
-
         return self.__css_beautify(html_content)
 
     def __css_beautify(self, content: str) -> str:
@@ -173,6 +167,6 @@ class WxHtmler:
             "digest": header.subtitle,
             "show_cover_pic": 1,
             "content": content,
-            "content_source_url": f"https://catcoding.me/p/{md_file.base_name}",
+            # "content_source_url": f"https://catcoding.me/p/{md_file.base_name}",
         }
         return article
