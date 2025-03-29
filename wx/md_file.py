@@ -4,6 +4,7 @@ import os
 from typing import Dict, Optional, List, Tuple
 import re
 import urllib.request
+import time
 
 
 @dataclass
@@ -17,12 +18,21 @@ class ImageReference:
     external: bool = False  # Whether the image is external from web
 
 
-def download_image(img_url):
+def download_image(img_url, source_dir):
+    """Download image from URL and save to assets directory"""
+    # Create assets directory if it doesn't exist
+    assets_dir = os.path.join(source_dir, "assets")
+    os.makedirs(assets_dir, exist_ok=True)
+
     resource = urllib.request.urlopen(img_url)
-    name = img_url.split("/")[-1]
-    f_name = "/tmp/{}".format(name)
-    if "." not in f_name:
-        f_name = f_name + ".png"
+    # Get file extension from URL or default to .png
+    file_ext = os.path.splitext(img_url.split("/")[-1])[1]
+    if not file_ext:
+        file_ext = ".png"
+    # Generate a unique filename using timestamp
+    timestamp = int(time.time())
+    name = f"image_{timestamp}{file_ext}"
+    f_name = os.path.join(assets_dir, name)
     with open(f_name, "wb") as f:
         f.write(resource.read())
     return f_name
@@ -252,7 +262,7 @@ class MarkdownFile:
         return file
 
     def download_image_from_web(self):
-        """Download image from web and save to tmp directory"""
+        """Download image from web and save to assets directory"""
         imgRefs = [imgRef for imgRef in self.image_pairs if imgRef.external]
         for imgRef in imgRefs:
             f_name = ""
@@ -266,9 +276,21 @@ class MarkdownFile:
                 continue
             if content:
                 imgRef.existed = True
-                f_name = "/tmp/{}".format(imgRef.url_in_text.split("/")[-1])
-                if "." not in f_name:
-                    f_name = f_name + ".png"
+                # Create assets directory if it doesn't exist
+                assets_dir = os.path.join(self.source_dir, "assets")
+                os.makedirs(assets_dir, exist_ok=True)
+
+                # Get file extension from URL or default to .png
+                file_ext = os.path.splitext(
+                    imgRef.url_in_text.split("/")[-1])[1]
+                if not file_ext:
+                    file_ext = ".png"
+
+                # Generate a unique filename using timestamp
+                timestamp = int(time.time())
+                name = f"image_{timestamp}{file_ext}"
+                f_name = os.path.join(assets_dir, name)
+
                 with open(f_name, "wb") as f:
                     f.write(content)
                     imgRef.original_path = f_name
