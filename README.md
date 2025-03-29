@@ -10,6 +10,8 @@
 - 支持文章元数据（标题、作者、摘要等）
 - 自动缓存已上传的文章和图片，避免重复上传
 - 支持指定文章MD文件的源目录
+- 支持检查文章中的缺失图片
+- 发布前自动检查缺失图片，确保文章完整性
 
 ## 安装
 
@@ -63,14 +65,46 @@ draft = True
 
 1. 使用环境变量指定的目录：
 ```bash
+# 发布文章
 poetry run python -m wx.sync
+
+# 检查缺失图片
+poetry run python -m wx.sync --act check
 ```
 
 2. 使用命令行参数指定目录：
 ```bash
+# 发布文章
 poetry run python -m wx.sync --source-dir /path/to/your/markdown/files
 # 或使用短参数
 poetry run python -m wx.sync -src /path/to/your/markdown/files
+
+# 检查缺失图片
+poetry run python -m wx.sync -src /path/to/your/markdown/files -a check
+```
+
+### 检查缺失图片
+
+使用 `--act check` 或 `-a check` 参数可以检查文章中的缺失图片：
+
+```bash
+poetry run python -m wx.sync -a check
+```
+
+输出示例：
+```
+Checking for missing images...
+
+Missing images found:
+
+File: article1.md
+Missing images:
+  - images/photo1.jpg
+  - images/photo2.png
+
+File: article2.md
+Missing images:
+  - images/photo3.jpg
 ```
 
 ### 工作流程
@@ -85,18 +119,35 @@ poetry run python -m wx.sync -src /path/to/your/markdown/files
    - 上传文章到微信公众号草稿箱
    - 缓存已处理的文章信息，避免重复上传
 
+### 发布流程
+
+1. 发布前自动检查缺失图片：
+   - 检查所有文章中的本地图片是否存在
+   - 如果发现缺失图片，会显示详细信息并停止发布
+   - 只有在所有图片都存在的情况下才继续发布
+
+2. 发布文章：
+   - 下载并处理网络图片
+   - 上传图片到微信素材库
+   - 转换文章格式
+   - 发布到微信公众号草稿箱
+
 ### 注意事项
 
 1. 文章会被上传到草稿箱，需要在微信公众号后台手动发布
 2. 本地图片路径应该相对于文章所在目录
 3. 网络图片会被自动下载并上传到微信素材库
 4. 已处理的文章会被缓存，如需重新上传，请清除缓存
+5. 检查缺失图片功能只检查本地图片，忽略网络图片
+6. 发布前会自动检查缺失图片，确保文章完整性
 
 ## 常见问题
 
 1. 如果遇到权限错误，请检查微信公众号的配置是否正确
 2. 如果图片上传失败，请检查图片格式是否符合微信要求
 3. 如果文章格式显示异常，请检查 Markdown 语法是否正确
+4. 如果检查到缺失图片，请确保图片文件存在于正确的路径下
+5. 如果发布时提示有缺失图片，请先修复图片后再重新发布
 
 ## 开发
 
@@ -142,6 +193,9 @@ poetry run black .
 - `test_wx_htmler.py`: 测试 HTML 转换功能
   - 测试 Markdown 到 HTML 的转换
   - 测试样式处理
+- `test_sync.py`: 测试同步功能
+  - 测试文章发布流程
+  - 测试缺失图片检查功能
 - `tests/integration/test_wx_upload_stuffs.py`: 集成测试（被 Skip 注释了，可自行开启）
   - 测试完整的文章上传流程
   - 测试图片上传和关联

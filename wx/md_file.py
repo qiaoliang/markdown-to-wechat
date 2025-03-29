@@ -5,6 +5,7 @@ from typing import Dict, Optional, List, Tuple
 import re
 import urllib.request
 import time
+import shutil
 
 
 @dataclass
