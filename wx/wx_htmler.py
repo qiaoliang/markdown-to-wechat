@@ -6,6 +6,8 @@ import os
 from typing import Optional, Dict
 from .md_file import MarkdownFile
 import re
+import tempfile
+from datetime import datetime
 
 
 class WxHtmler:
@@ -29,6 +31,46 @@ class WxHtmler:
     def __init__(self):
         self.assets_dir = "./assets"
         self.uploaded_images = {}
+        self.debug = True  # 默认开启调试模式
+        self.debug_dir = os.path.join(self.assets_dir, "wx_html_debug")
+        # 确保调试目录存在
+        if not os.path.exists(self.debug_dir):
+            os.makedirs(self.debug_dir)
+
+    def _save_debug_html(self, content: str) -> str:
+        """保存 HTML 到调试文件
+
+        Args:
+            content: 生成的 HTML 内容
+
+        Returns:
+            保存的文件路径
+        """
+        if not self.debug:
+            return ""
+
+        # 生成带时间戳的文件名
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        debug_file = os.path.join(self.debug_dir, f"wx_html_{timestamp}.html")
+
+        # 添加基本的 HTML 结构和编码
+        full_html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>WeChat HTML Preview - {timestamp}</title>
+</head>
+<body>
+{content}
+</body>
+</html>"""
+
+        # 保存文件
+        with open(debug_file, "w", encoding="utf-8") as f:
+            f.write(full_html)
+
+        print(f"\nDebug HTML saved to: {debug_file}")
+        return debug_file
 
     def render_markdown(self, content: str, uploaded_images: dict = None) -> str:
         """渲染 Markdown 内容为 HTML"""
@@ -43,6 +85,10 @@ class WxHtmler:
         content = self._format_fix(content)
         content = self._fix_image(content)
         content = self._gen_css("header") + content + "</section>"
+
+        # 保存调试文件
+        self._save_debug_html(content)
+
         return content
 
     def _replace_para(self, content: str) -> str:
@@ -62,8 +108,19 @@ class WxHtmler:
         return tmpl.format(*args)
 
     def _replace_header(self, content: str) -> str:
-        """替换标题标签样式"""
+        """替换标题标签样式
+        这个方法处理 HTML 中的标题标签（h1-h6），为其添加自定义样式。
+        对于 h2 标签，使用特殊的带编号样式（sub_num.tmpl）
+        对于其他标签，使用普通样式（sub.tmpl）
+        """
         res = []
+        h2_counter = 1  # 跟踪 h2 的序号
+
+        # 首先计算文档中 h2 的总数
+        pq = PyQuery(content)
+        h2_tags = pq('h2')
+        total_h2 = len(h2_tags)
+
         for line in content.split("\n"):
             l = line.strip()
             if l.startswith("<h") and l.endswith(">"):
@@ -75,7 +132,15 @@ class WxHtmler:
                     if (digit >= "0" and digit <= "9")
                     else 18
                 )
-                res.append(self._gen_css("sub", tag, font, value, tag))
+
+                if tag == "h2":
+                    # 对于 h2 标签，使用带编号的特殊模板
+                    res.append(self._gen_css("sub_num", tag,
+                               str(h2_counter), font, value, tag))
+                    h2_counter += 1
+                else:
+                    # 其他标签使用普通模板
+                    res.append(self._gen_css("sub", tag, font, value, tag))
             else:
                 res.append(line)
         return "\n".join(res)

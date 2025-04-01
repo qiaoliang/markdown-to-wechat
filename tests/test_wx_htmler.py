@@ -11,6 +11,7 @@ REQUIRED_TEMPLATES = [
     "header.tmpl",
     "para.tmpl",
     "sub.tmpl",
+    "sub_num.tmpl",
     "link.tmpl",
     "figure.tmpl",
     "code.tmpl",
@@ -89,8 +90,15 @@ def assert_html_contains(html: str, expected_elements: list):
 
 def assert_styles_applied(html: str):
     """验证样式是否正确应用"""
-    for style in EXPECTED_STYLES.values():
-        assert style in html
+    expected_style_patterns = [
+        'margin-top: 30px',
+        'margin-bottom: 15px',
+        'padding: 0px',
+        'font-weight: bold',
+        'color: black',
+    ]
+    for pattern in expected_style_patterns:
+        assert pattern in html, f"Missing style pattern: {pattern}"
 
 
 class TestWxHtmler:
@@ -119,9 +127,9 @@ class TestWxHtmler:
         )
 
         expected_elements = [
-            '<span class="content">Sample Title</span>',
-            '<span class="content">Subheading</span>',
-            '<span class="content">third Heading</span>',
+            '>Sample Title<',
+            '>Subheading<',
+            '>third Heading<',
             '<p style="font-size: 14px; padding-top: 8px; padding-bottom: 8px; margin: 0; line-height: 22px;">This is a sample paragraph in the markdown file. It can contain <strong>bold text</strong>, <em>italic text</em>, and other markdown features.</p>',
             "<ul>",
             "<li>List item 1</li>",
@@ -130,8 +138,6 @@ class TestWxHtmler:
             '<img alt="local image" src="./assets/exists.png" />',
             '<pre class="codehilite"><code class="language-python">',
         ]
-        print(html)
-        print(expected_elements)
         assert_html_contains(html, expected_elements)
         assert_styles_applied(html)
 
@@ -141,7 +147,16 @@ class TestWxHtmler:
         expected_classes = ["footnotes", "codehilite"]
         assert_html_contains(
             html, [f'class="{cls}"' for cls in expected_classes])
-        assert_styles_applied(html)
+
+        expected_style_patterns = [
+            'margin-top: 30px',
+            'margin-bottom: 15px',
+            'padding: 0px',
+            'font-weight: bold',
+            'color: black',
+        ]
+        for pattern in expected_style_patterns:
+            assert pattern in html, f"Missing style pattern: {pattern}"
 
     def test_link_processing(self, wx_htmler, sample_md_file):
         """测试链接处理功能"""
@@ -259,3 +274,69 @@ Some text here
 More text
 ![Third Image](https://example.com/image3.gif)"""
         assert htmler.update_image_urls(content, uploaded_images) == expected
+
+    def test_h2_numbering(self, wx_htmler):
+        """测试 h2 标题的编号和样式
+        验证：
+        1. h2 标题有红色圆形背景的数字
+        2. 数字按顺序递增
+        3. 其他标题（h1, h3）保持原样
+        """
+        markdown_content = """
+# First Title
+## Second Title 1
+### Third Title 1
+## Second Title 2
+### Third Title 2
+## Second Title 3
+# Another First Title
+## Second Title 4
+### Third Title 3
+"""
+        html = wx_htmler.render_markdown(markdown_content)
+
+        # 验证 h2 标题的样式
+        expected_h2_patterns = [
+            # 检查红色圆形背景
+            'background-color: #B25D55',
+            'border-radius: 50%',
+            # 检查数字
+            '>1</div>',
+            '>2</div>',
+            '>3</div>',
+            '>4</div>',
+            # 检查标题文本
+            '>Second Title 1<',
+            '>Second Title 2<',
+            '>Second Title 3<',
+            '>Second Title 4<',
+        ]
+
+        # 验证其他标题的样式
+        expected_other_patterns = [
+            # h1 标题
+            '>First Title<',
+            '>Another First Title<',
+            # h3 标题
+            '>Third Title 1<',
+            '>Third Title 2<',
+            '>Third Title 3<',
+        ]
+
+        # 验证所有预期模式都存在于生成的 HTML 中
+        for pattern in expected_h2_patterns:
+            assert pattern in html, f"Missing h2 pattern: {pattern}"
+
+        for pattern in expected_other_patterns:
+            assert pattern in html, f"Missing header pattern: {pattern}"
+
+        # 验证 h2 标题的顺序
+        h2_positions = [html.find(title) for title in [
+            "Second Title 1", "Second Title 2", "Second Title 3", "Second Title 4"]]
+        assert h2_positions == sorted(
+            h2_positions), "H2 titles are not in correct order"
+
+        # 验证数字的顺序
+        number_positions = [html.find(f'>{i}</div>') for i in range(1, 5)]
+        assert number_positions == sorted(
+            number_positions), "H2 numbers are not in correct order"
