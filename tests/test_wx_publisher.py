@@ -20,8 +20,24 @@ def temp_test_dir():
         os.path.join(testdata_dir, "assets"), os.path.join(temp_dir, "assets")
     )
     shutil.copy2(
-        os.path.join(testdata_dir, "a_template.md"), os.path.join(temp_dir, "test.md")
+        os.path.join(testdata_dir, "a_template.md"), os.path.join(
+            temp_dir, "test.md")
     )
+    # Create content for test.md
+    with open(os.path.join(temp_dir, "test.md"), "w", encoding="utf-8") as f:
+        f.write(
+            """+++
+title= "Test Article"
+author= "Test Author"
+subtitle= "Test Digest"
+date= "2024-03-27"
+draft= "false"
++++
+
+# Test Article
+This is a test article.
+"""
+        )
     yield temp_dir
     # Cleanup
     shutil.rmtree(temp_dir)
@@ -64,7 +80,8 @@ def wx_publisher(wx_cache, mock_wx_client):
             }
         return True
 
-    publisher.image_processor.process_article_images = Mock(side_effect=process_images)
+    publisher.image_processor.process_article_images = Mock(
+        side_effect=process_images)
     return publisher
 
 
@@ -101,7 +118,8 @@ This article has no images.
 """
         )
 
-    md_file = MarkdownFile(source_dir=temp_test_dir, md_file_name="no_images.md")
+    md_file = MarkdownFile(source_dir=temp_test_dir,
+                           md_file_name="no_images.md")
 
     # Mock image processor for no images case
     def process_no_images(md_file):
@@ -125,7 +143,8 @@ This article has no images.
 def test_publish_article_image_processing_failure(wx_publisher, test_md_file):
     """Test article publishing when image processing fails"""
     # Mock image processor to simulate failure
-    wx_publisher.image_processor.process_article_images = Mock(return_value=False)
+    wx_publisher.image_processor.process_article_images = Mock(
+        return_value=False)
 
     with pytest.raises(ValueError, match="Failed to process images for article"):
         wx_publisher.publish_single_article(test_md_file)
@@ -159,6 +178,7 @@ title= "No Images Article"
 author= "Test Author"
 subtitle= "Test Digest"
 date= "2024-03-27"
+draft="false"
 +++
 
 # No Images Article
@@ -176,6 +196,7 @@ title= "Another Article"
 author= "Test Author"
 subtitle= "Test Digest"
 date= "2024-03-27"
+draft="false"
 +++
 
 # Another Article
@@ -184,11 +205,28 @@ This article has an image:
 """
         )
 
+    # Create content for test.md
+    with open(os.path.join(temp_test_dir, "test.md"), "w", encoding="utf-8") as f:
+        f.write(
+            """+++
+title= "Test Article"
+author= "Test Author"
+subtitle= "Test Digest"
+date= "2024-03-27"
+draft= "false"
++++
+
+# Test Article
+This is a test article.
+"""
+        )
+
     # 创建测试文件对象
     articles = [
         MarkdownFile(source_dir=temp_test_dir, md_file_name="test.md"),
         MarkdownFile(source_dir=temp_test_dir, md_file_name="no_images.md"),
-        MarkdownFile(source_dir=temp_test_dir, md_file_name="another_article.md"),
+        MarkdownFile(source_dir=temp_test_dir,
+                     md_file_name="another_article.md"),
     ]
 
     # 模拟图片处理
@@ -235,6 +273,7 @@ title= "New Article"
 author= "Test Author"
 subtitle= "Test Digest"
 date= "2024-03-27"
+draft="false"
 +++
 
 # New Article

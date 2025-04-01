@@ -101,7 +101,7 @@ def gen_and_upload(source_dir: str, path: Path, publisher: WxPublisher) -> bool:
         md_file.use_temp_img_for_unavailable_img()
         # 发布文章
         try:
-            media_id = publisher.publish_article(md_file)
+            media_id = publisher.publish_single_article(md_file)
             if media_id:
                 print(
                     f"Successfully published {path_str}, media_id: {media_id}")
@@ -133,28 +133,41 @@ def post_articles(source_dir: str) -> bool:
     """
     print(f"Source directory: {source_dir}")
     try:
-        # 首先检查缺失图片
-        print("Checking for missing images before publishing...")
-        missing_images = check_missing_images(source_dir)
-        if missing_images:
-            print("\nFound missing images. Please fix them before publishing:")
-            for item in missing_images:
-                print(f"\nFile: {item['filename']}")
-                print("Missing images:")
-                for img in item["missing_images"]:
-                    print(f"  - {img}")
-            return False
-
         # 创建微信相关对象
         _, publisher, _ = create_wx_objects(source_dir)
 
-        # 处理所有markdown文件
-        success = True
+        # 收集所有 markdown 文件
+        md_files = []
         pathlist = Path(source_dir).glob("**/*.md")
         for path in pathlist:
-            if not gen_and_upload(source_dir, path, publisher):
-                success = False
-        return success
+            try:
+                # 提取并验证markdown文件
+                md_file = MarkdownFile.extract(source_dir, path.name)
+                # 检查缺失图片
+                broken_links = md_file.find_broken_img_links()
+                if broken_links:
+                    print(f"\nFound missing images in {path.name}:")
+                    for img in broken_links:
+                        print(f"  - {img.url_in_text}")
+                    return False
+                md_files.append(md_file)
+            except Exception as e:
+                print(f"Failed to process {path}: {e}")
+                continue
+
+        if not md_files:
+            print("No valid markdown files found to publish")
+            return False
+
+        # 使用 publisher 的发布功能
+        media_ids = publisher.publish_multi_articles(md_files)
+        if not media_ids:
+            print("Failed to publish any articles")
+            return False
+
+        print(f"Successfully published {len(media_ids)} articles")
+        return True
+
     except Exception as e:
         print(f"Failed to process directory {source_dir}: {e}")
         return False
@@ -163,62 +176,111 @@ def post_articles(source_dir: str) -> bool:
 def main() -> int:
     """主函数
 
+    用法示例:
+        poetry run sync --source-dir /path/to/markdown/files  # 发布文章
+        poetry run sync -src /path/to/markdown/files         # 使用短参数
+        poetry run sync --source-dir ./articles --act check  # 只检查图片
+
+    环境变量:
+        WX_ARTICLE_MD_DIR: 可选，指定 markdown 文件目录
+        如果设置了此环境变量，可以不使用 --source-dir 参数
+
     Returns:
         int: 退出码，0表示成功，1表示失败
     """
     parser = argparse.ArgumentParser(
-        description="Upload markdown files to WeChat Official Account"
+        description="上传 markdown 文件到微信公众号",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        allow_abbrev=False,  # 禁用参数前缀匹配
+        epilog="""
+示例:
+    %(prog)s --source-dir ./articles          # 发布 articles 目录下的文章
+    %(prog)s -src ./articles                  # 同上，使用短参数
+    %(prog)s --source-dir ./articles --act check  # 只检查图片是否缺失
+    %(prog)s --act check                      # 使用环境变量中的目录检查图片
+
+环境变量:
+    WX_ARTICLE_MD_DIR: 可选，指定 markdown 文件目录
+    如果设置了此环境变量，可以不使用 --source-dir 参数
+        """
     )
     parser.add_argument(
         "--source-dir",
         "-src",
-        help="Directory containing markdown files (if not specified, will use WX_ARTICLE_MD_DIR environment variable)",
+        "--dir",  # 添加 --dir 作为显式别名
+        help="markdown 文件所在目录（如果不指定，将使用 WX_ARTICLE_MD_DIR 环境变量）",
     )
     parser.add_argument(
         "--act",
         "-a",
         choices=["check", "post"],
         default="post",
-        help="Action to perform: check for missing images or post articles",
+        help="执行的操作：check - 只检查缺失的图片；post - 发布文章（默认）",
     )
     args = parser.parse_args()
 
-    # 如果命令行没有指定目录，则从环境变量读取
+    # 处理源目录参数
     source_dir = args.source_dir
     if not source_dir:
         source_dir = os.getenv("WX_ARTICLE_MD_DIR")
         if not source_dir:
-            print("Error: No source directory specified.")
-            print("Please either:")
-            print("  1. Use --source-dir/-src command line argument")
-            print("  2. Set WX_ARTICLE_MD_DIR environment variable")
+            print("\n错误：未指定源目录")
+            print("请通过以下方式之一指定目录：")
+            print("  1. 使用命令行参数：--source-dir 或 -src")
+            print("  2. 设置环境变量：WX_ARTICLE_MD_DIR")
+            print("\n示例：")
+            print("  poetry run sync --source-dir ./articles")
+            print("  或")
+            print("  export WX_ARTICLE_MD_DIR=./articles")
+            print("  poetry run sync")
             return 1
+        else:
+            print(f"\n使用环境变量中的目录：{source_dir}")
+            response = input("是否继续？(y/N): ").lower()
+            if response != 'y':
+                print("操作已取消")
+                return 0
 
+    # 验证目录是否存在
     if not os.path.exists(source_dir):
-        print(f"Error: Directory not found: {source_dir}")
-        print(
-            f"Please make sure the directory exists and you have permission to access it."
-        )
+        print(f"\n错误：目录不存在：{source_dir}")
+        print("请确保目录存在且有访问权限")
         return 1
 
-    print(f"Using source directory: {source_dir}")
+    # 验证目录是否可访问
+    if not os.access(source_dir, os.R_OK):
+        print(f"\n错误：无法访问目录：{source_dir}")
+        print("请确保有目录的读取权限")
+        return 1
+
+    # 验证目录中是否有 markdown 文件
+    md_files = list(Path(source_dir).glob("**/*.md"))
+    if not md_files:
+        print(f"\n警告：目录 {source_dir} 中没有找到 markdown 文件")
+        response = input("是否继续？(y/N): ").lower()
+        if response != 'y':
+            print("操作已取消")
+            return 0
+
+    print(f"\n使用目录：{source_dir}")
+    print(f"找到 {len(md_files)} 个 markdown 文件")
 
     if args.act == "check":
-        print("Checking for missing images...")
+        print("\n开始检查缺失图片...")
         missing_images = check_missing_images(source_dir)
         if missing_images:
-            print("\nMissing images found:")
+            print("\n发现缺失的图片：")
             for item in missing_images:
-                print(f"\nFile: {item['filename']}")
-                print("Missing images:")
+                print(f"\n文件：{item['filename']}")
+                print("缺失的图片：")
                 for img in item["missing_images"]:
                     print(f"  - {img}")
             return 1
         else:
-            print("No missing images found.")
+            print("\n未发现缺失的图片")
             return 0
     else:
-        print("Begin syncing to WeChat")
+        print("\n开始同步到微信公众号...")
         success = post_articles(source_dir)
         return 0 if success else 1
 

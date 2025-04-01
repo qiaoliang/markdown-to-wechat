@@ -24,6 +24,10 @@ class WxPublisher:
             # 检查文章是否已经在缓存中
             if self.cache.get(md_file.abs_path):
                 continue
+            # 不上传草稿
+            if md_file.header.draft:
+                print(f"Skipping draft article: {md_file.abs_path}")
+                continue
             article = self.assembling_article(md_file)
             if article:
                 articles.append(article)
