@@ -301,10 +301,10 @@ More text
             'background-color: #B25D55',
             'border-radius: 50%',
             # 检查数字
-            '>1</div>',
-            '>2</div>',
-            '>3</div>',
-            '>4</div>',
+            '>1</section>',
+            '>2</section>',
+            '>3</section>',
+            '>4</section>',
             # 检查标题文本
             '>Second Title 1<',
             '>Second Title 2<',
@@ -337,6 +337,6 @@ More text
             h2_positions), "H2 titles are not in correct order"
 
         # 验证数字的顺序
-        number_positions = [html.find(f'>{i}</div>') for i in range(1, 5)]
+        number_positions = [html.find(f'>{i}</section>') for i in range(1, 5)]
         assert number_positions == sorted(
             number_positions), "H2 numbers are not in correct order"
