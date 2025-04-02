@@ -160,7 +160,7 @@ poetry run pytest tests -v
 poetry run pytest tests/test_sync.py -v
 
 # 运行特定测试用例
-poetry run pytest tests/test_sync.py::test_create_wx_objects -v
+poetry run pytest tests/test_main.py::test_create_wx_objects -v
 ```
 
 2. 测试覆盖：
@@ -193,7 +193,7 @@ poetry run black .
 - `test_wx_htmler.py`: 测试 HTML 转换功能
   - 测试 Markdown 到 HTML 的转换
   - 测试样式处理
-- `test_sync.py`: 测试同步功能
+- `test_main.py`: 测试同步功能
   - 测试文章发布流程
   - 测试缺失图片检查功能
 - `tests/integration/test_wx_upload_stuffs.py`: 集成测试（被 Skip 注释了，可自行开启）

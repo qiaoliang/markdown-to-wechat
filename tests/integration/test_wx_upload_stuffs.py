@@ -124,7 +124,6 @@ This is a test article with multiple images.
     assert image1_cache[1] != image2_cache[1]  # 确保两个图片的 URL 不同
 
 
-@pytest.mark.skip(reason="skip")
 def test_publish_article_with_multiple_images(tmp_path):
     """测试发布包含多张图片的文章"""
     # 创建测试目录
@@ -160,6 +159,21 @@ This is section 1 with some text.
 ## Section 2
 
 This is section 2 with some text.
+
+```python
+print("this is a loooooong code block.this is a loooooong code block.this is a loooooong code block.this is a loooooong code block.")
+print("Hello, World!  - 1")
+print("Hello, World!  - 2")
+print("Hello, World!  - 3")
+print("Hello, World!  - 4")
+print("Hello, World!  - 5")
+print("Hello, World!  - 6")
+print("Hello, World!  - 7")
+print("Hello, World!  - 8")
+print("Hello, World!  - 9")
+print("Hello, World!  - 10")
+```
+
 """
     md_file = test_dir / "test.md"
     md_file.write_text(md_content)

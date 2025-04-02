@@ -85,6 +85,7 @@ def sample_md_file(temp_test_dir):
 def assert_html_contains(html: str, expected_elements: list):
     """验证HTML包含所有预期的元素"""
     for element in expected_elements:
+        print(f"Checking element: {element}")
         assert element in html, f"Expected element not found: {element}"
 
 
@@ -136,7 +137,8 @@ class TestWxHtmler:
             "<li>List item 2</li>",
             '<em style="font-style: italic; color: black;">https://example.com</em>',
             '<img alt="local image" src="./assets/exists.png" />',
-            '<pre class="codehilite"><code class="language-python">',
+            '<pre class="codehilite"',
+            '<code class="language-python">',
         ]
         assert_html_contains(html, expected_elements)
         assert_styles_applied(html)
@@ -191,7 +193,80 @@ class TestWxHtmler:
             "# This is a code block",
             "print(&quot;Hello, World!&quot;)",
         ]
+
         assert_html_contains(html, expected_elements)
+
+    def test_code_block_css_generation(self, wx_htmler):
+        """测试代码块的 HTML 生成
+        验证：
+        1. 代码块的样式（class="codehilite"）
+        2. 代码块的缩进和格式保持
+        3. 代码块中的特殊字符处理
+        """
+        markdown_content = """
+# Code Style Test
+
+Here's a code block with style:
+```python
+def process_data(data):
+    # Process input data
+    result = {
+        "name": "Test & Demo",
+        "value": "<special>",
+        "items": [
+            "item1",
+            "item2"
+        ]
+    }
+    return result
+```
+
+End of test.
+"""
+        html = wx_htmler.render_markdown(markdown_content)
+
+        # 打印生成的 HTML，方便调试
+        print("\n=== Generated HTML ===")
+        print(html)
+        print("=== End of HTML ===\n")
+
+        # 验证代码块样式
+        expected_style = [
+            '<pre class="codehilite" style="background: #272822; border-radius: 3px; word-wrap: break-word; overflow: scroll; padding: 12px 13px; line-height: 125%; color: white; font-size: 11px;">',
+            '<code class="language-python">',
+            '</code></pre>'
+        ]
+        for element in expected_style:
+            assert element in html, f"Missing code block style element: {element}"
+
+        # 验证代码缩进和格式
+        expected_code = [
+            'def process_data(data):',
+            '    # Process input data',
+            '    result = {',
+            '        &quot;name&quot;: &quot;Test &amp; Demo&quot;,',
+            '        &quot;value&quot;: &quot;&lt;special&gt;&quot;,',
+            '        &quot;items&quot;: [',
+            '            &quot;item1&quot;,',
+            '            &quot;item2&quot;',
+            '        ]',
+            '    }',
+            '    return result'
+        ]
+        for line in expected_code:
+            print(f"Checking line: {line}")  # 打印正在检查的行
+            assert line in html, f"Missing or incorrect code line: {line}"
+
+        # 验证特殊字符处理
+        expected_special = [
+            '&lt;special&gt;',  # HTML 特殊字符
+            'Test &amp; Demo',  # & 符号
+            '&quot;item1&quot;',  # 引号
+            '&quot;item2&quot;'   # 引号
+        ]
+        for special in expected_special:
+            print(f"Checking special: {special}")  # 打印正在检查的特殊字符
+            assert special in html, f"Special character not properly escaped: {special}"
 
     def test_generate_article(self, wx_htmler, sample_md_file):
         """测试文章生成功能"""

@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Test cases for sync.py
+Test cases for main.py
 """
 import pytest
 from pathlib import Path
-from wx.sync import check_missing_images
+from wx.main import check_missing_images
 from wx.md_file import MarkdownFile
 
 

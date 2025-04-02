@@ -12,6 +12,42 @@ from datetime import datetime
 
 class WxHtmler:
 
+    def __init__(self):
+        self.assets_dir = "./assets"
+        self.uploaded_images = {}
+        self.debug = True  # 默认关闭调试模式
+        self.debug_dir = os.path.join(self.assets_dir, "wx_html_debug")
+        # 确保调试目录存在
+        if not os.path.exists(self.debug_dir):
+            os.makedirs(self.debug_dir)
+
+    def generate_article(self, md_file: MarkdownFile) -> dict:
+        """生成文章对象"""
+        if not md_file.image_uploaded:
+            raise ValueError(
+                "Images not uploaded for article. Please upload images first."
+            )
+
+        # 渲染 markdown 生成 html 的内容
+        content = self.render_markdown(md_file.body.body_text)
+
+        # 获取文章属性，与 content 一起组装成文章对象
+        header = md_file.header
+        article = {
+            "title": header.title,
+            "author": header.author,
+            "digest": header.subtitle,
+            "show_cover_pic": 1,  # 是否显示封面图片，1 表示显示，0 表示不显示
+            "content": content,
+            # "content_source_url": f"https://catcoding.me/p/{md_file.base_name}",
+        }
+        return article
+
+    def render_markdown(self, content: str, uploaded_images: dict = None) -> str:
+        """渲染 Markdown 内容为 HTML"""
+        html_content = self.md_to_original_html(content, uploaded_images)
+        return self.__css_beautify(html_content)
+
     def md_to_original_html(self, content: str, uploaded_images: dict = None) -> str:
         """渲染 Markdown 内容为 HTML"""
         if uploaded_images:
@@ -26,56 +62,9 @@ class WxHtmler:
             ),
         ]
         html_content = markdown.markdown(content, extensions=exts)
+        # 保存调试文件
+        self._save_debug_html(content, "before_css")
         return html_content
-
-    def __init__(self):
-        self.assets_dir = "./assets"
-        self.uploaded_images = {}
-        self.debug = True  # 默认开启调试模式
-        self.debug_dir = os.path.join(self.assets_dir, "wx_html_debug")
-        # 确保调试目录存在
-        if not os.path.exists(self.debug_dir):
-            os.makedirs(self.debug_dir)
-
-    def _save_debug_html(self, content: str) -> str:
-        """保存 HTML 到调试文件
-
-        Args:
-            content: 生成的 HTML 内容
-
-        Returns:
-            保存的文件路径
-        """
-        if not self.debug:
-            return ""
-
-        # 生成带时间戳的文件名
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        debug_file = os.path.join(self.debug_dir, f"wx_html_{timestamp}.html")
-
-        # 添加基本的 HTML 结构和编码
-        full_html = f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>WeChat HTML Preview - {timestamp}</title>
-</head>
-<body>
-{content}
-</body>
-</html>"""
-
-        # 保存文件
-        with open(debug_file, "w", encoding="utf-8") as f:
-            f.write(full_html)
-
-        print(f"\nDebug HTML saved to: {debug_file}")
-        return debug_file
-
-    def render_markdown(self, content: str, uploaded_images: dict = None) -> str:
-        """渲染 Markdown 内容为 HTML"""
-        html_content = self.md_to_original_html(content, uploaded_images)
-        return self.__css_beautify(html_content)
 
     def __css_beautify(self, content: str) -> str:
         """美化 HTML 内容"""
@@ -87,7 +76,7 @@ class WxHtmler:
         content = self._gen_css("header") + content + "</section>"
 
         # 保存调试文件
-        self._save_debug_html(content)
+        self._save_debug_html(content, "after_css")
 
         return content
 
@@ -193,11 +182,8 @@ class WxHtmler:
     def _format_fix(self, content: str) -> str:
         """修复其他格式问题"""
         content = content.replace("</li>", "</li>\n<p></p>")
-        content = content.replace("background: #272822", self._gen_css("code"))
-        content = content.replace(
-            """<pre style="line-height: 125%">""",
-            """<pre style="line-height: 125%; color: white; font-size: 11px;">""",
-        )
+        content = content.replace("<pre class=\"codehilite\">",
+                                  self._gen_css("code"))
         return content
 
     def update_image_urls(self, content: str, uploaded_images: Dict) -> str:
@@ -213,24 +199,38 @@ class WxHtmler:
             return list(uploaded_images.values())[0][0]
         return None
 
-    def generate_article(self, md_file: MarkdownFile) -> dict:
-        """生成文章对象"""
-        if not md_file.image_uploaded:
-            raise ValueError(
-                "Images not uploaded for article. Please upload images first."
-            )
+    def _save_debug_html(self, content: str, debug_file: str) -> str:
+        """保存 HTML 到调试文件
 
-        # 渲染 markdown 生成 html
-        content = self.render_markdown(md_file.body.body_text)
+        Args:
+            content: 生成的 HTML 内容
 
-        # 获取文章属性
-        header = md_file.header
-        article = {
-            "title": header.title,
-            "author": header.author,
-            "digest": header.subtitle,
-            "show_cover_pic": 1,
-            "content": content,
-            # "content_source_url": f"https://catcoding.me/p/{md_file.base_name}",
-        }
-        return article
+        Returns:
+            保存的文件路径
+        """
+        if not self.debug:
+            return ""
+
+        # 生成带时间戳的文件名
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        debug_file = os.path.join(
+            self.debug_dir, f"wx_html_{timestamp}_{debug_file}.html")
+
+        # 添加基本的 HTML 结构和编码
+        full_html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>WeChat HTML Preview - {timestamp}</title>
+</head>
+<body>
+{content}
+</body>
+</html>"""
+
+        # 保存文件
+        with open(debug_file, "w", encoding="utf-8") as f:
+            f.write(full_html)
+
+        print(f"\nDebug HTML saved to: {debug_file}")
+        return debug_file
