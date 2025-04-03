@@ -1,5 +1,4 @@
 dist/
-instructions/
 .coverage
 htmlcov
 **/.DS_*
