@@ -12,6 +12,15 @@ from .wx_cache import WxCache
 from .wx_publisher import WxPublisher
 from .wx_htmler import WxHtmler
 from .md_file import MarkdownFile
+from .error_handler import (
+    error_handler,
+    FileSystemError,
+    ValidationError,
+    ImageError,
+    APIError,
+    ErrorLevel,
+    RetryStrategy
+)
 
 
 def create_wx_objects(
@@ -77,17 +86,20 @@ def gen_and_upload(source_dir: str, path: Path, publisher: WxPublisher) -> bool:
     Returns:
         bool: 是否处理成功
     """
+    path_str = str(path)
     try:
-        path_str = str(path)
         single_file_name = path.name
-        print(f"Processing file: {path_str}")
+        error_handler.logger.info(f"Processing file: {path_str}")
 
         # 提取并验证markdown文件
-        md_file = MarkdownFile.extract(source_dir, single_file_name)
+        try:
+            md_file = MarkdownFile.extract(source_dir, single_file_name)
+        except Exception as e:
+            raise ValidationError(f"Failed to extract markdown file: {str(e)}")
 
         # 不上传草稿
         if md_file.header.draft:
-            print(f"Skipping draft: {path_str}")
+            error_handler.logger.info(f"Skipping draft: {path_str}")
             return True
 
         # 下载网络图片
@@ -95,33 +107,32 @@ def gen_and_upload(source_dir: str, path: Path, publisher: WxPublisher) -> bool:
             try:
                 md_file.download_image_from_web()
             except Exception as e:
-                print(f"Failed to download images for {path_str}: {e}")
-                return False
+                raise ImageError(f"Failed to download images: {str(e)}")
+
         # 如果图片不存在，则使用默认的不存在图片
         md_file.use_temp_img_for_unavailable_img()
+
         # 发布文章
         try:
             media_id = publisher.publish_single_article(md_file)
             if media_id:
-                print(
+                error_handler.logger.info(
                     f"Successfully published {path_str}, media_id: {media_id}")
                 return True
             else:
-                print(
-                    f"Failed to publish {path_str}: {e}, some images are unavailable")
-                return False
+                raise APIError("Failed to get media_id from WeChat API")
         except ValueError as e:
-            print(f"Failed to publish {path_str}: {e}")
-            return False
+            raise ValidationError(f"Invalid article format: {str(e)}")
         except Exception as e:
-            print(f"Unexpected error while publishing {path_str}: {e}")
-            return False
+            raise APIError(f"Failed to publish article: {str(e)}")
 
     except Exception as e:
-        print(f"Failed to process {path_str}: {e}")
+        error_handler.handle_error(
+            e, {"file": path_str, "source_dir": source_dir})
         return False
 
 
+@error_handler.retry(max_retries=3, strategy=RetryStrategy.LINEAR_BACKOFF)
 def post_articles(source_dir: str) -> bool:
     """发布目录下的所有markdown文件到微信公众号
 
@@ -131,7 +142,11 @@ def post_articles(source_dir: str) -> bool:
     Returns:
         bool: 是否全部处理成功
     """
-    print(f"Source directory: {source_dir}")
+    error_handler.logger.info(f"Source directory: {source_dir}")
+
+    if not os.path.exists(source_dir):
+        raise FileSystemError(f"Source directory does not exist: {source_dir}")
+
     try:
         # 创建微信相关对象
         _, publisher, _ = create_wx_objects(source_dir)
@@ -139,6 +154,7 @@ def post_articles(source_dir: str) -> bool:
         # 收集所有 markdown 文件
         md_files = []
         pathlist = Path(source_dir).glob("**/*.md")
+
         for path in pathlist:
             try:
                 # 提取并验证markdown文件
@@ -146,30 +162,36 @@ def post_articles(source_dir: str) -> bool:
                 # 检查缺失图片
                 broken_links = md_file.find_broken_img_links()
                 if broken_links:
-                    print(f"\nFound missing images in {path.name}:")
-                    for img in broken_links:
-                        print(f"  - {img.url_in_text}")
-                    return False
+                    error_details = {
+                        "file": path.name,
+                        "missing_images": [img.url_in_text for img in broken_links]
+                    }
+                    raise ImageError(
+                        f"Found {len(broken_links)} missing images in {path.name}",
+                        ErrorLevel.ERROR
+                    )
                 md_files.append(md_file)
             except Exception as e:
-                print(f"Failed to process {path}: {e}")
+                error_handler.handle_error(e, {"file": str(path)})
                 continue
 
         if not md_files:
-            print("No valid markdown files found to publish")
-            return False
+            raise ValidationError(
+                "No valid markdown files found to publish",
+                ErrorLevel.WARNING
+            )
 
         # 使用 publisher 的发布功能
         media_ids = publisher.publish_multi_articles(md_files)
         if not media_ids:
-            print("Failed to publish any articles")
-            return False
+            raise APIError("Failed to publish any articles", ErrorLevel.ERROR)
 
-        print(f"Successfully published {len(media_ids)} articles")
+        error_handler.logger.info(
+            f"Successfully published {len(media_ids)} articles")
         return True
 
     except Exception as e:
-        print(f"Failed to process directory {source_dir}: {e}")
+        error_handler.handle_error(e, {"source_dir": source_dir})
         return False
 
 

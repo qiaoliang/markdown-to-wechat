@@ -6,6 +6,13 @@ import re
 import urllib.request
 import time
 import shutil
+from .error_handler import (
+    error_handler,
+    FileSystemError,
+    ImageError,
+    ErrorLevel,
+    RetryStrategy
+)
 
 
 @dataclass
@@ -19,24 +26,49 @@ class ImageReference:
     external: bool = False  # Whether the image is external from web
 
 
-def download_image(img_url, source_dir):
+@error_handler.retry(max_retries=3, strategy=RetryStrategy.LINEAR_BACKOFF)
+def download_image(img_url: str, source_dir: str) -> str:
     """Download image from URL and save to assets directory"""
-    # Create assets directory if it doesn't exist
-    assets_dir = os.path.join(source_dir, "assets")
-    os.makedirs(assets_dir, exist_ok=True)
+    try:
+        # Create assets directory if it doesn't exist
+        assets_dir = os.path.join(source_dir, "assets")
+        try:
+            os.makedirs(assets_dir, exist_ok=True)
+        except Exception as e:
+            raise FileSystemError(
+                f"Failed to create assets directory: {str(e)}")
 
-    resource = urllib.request.urlopen(img_url)
-    # Get file extension from URL or default to .png
-    file_ext = os.path.splitext(img_url.split("/")[-1])[1]
-    if not file_ext:
-        file_ext = ".png"
-    # Generate a unique filename using timestamp
-    timestamp = int(time.time())
-    name = f"image_{timestamp}{file_ext}"
-    f_name = os.path.join(assets_dir, name)
-    with open(f_name, "wb") as f:
-        f.write(resource.read())
-    return f_name
+        try:
+            resource = urllib.request.urlopen(img_url)
+        except Exception as e:
+            raise ImageError(
+                f"Failed to download image from {img_url}: {str(e)}")
+
+        # Get file extension from URL or default to .png
+        file_ext = os.path.splitext(img_url.split("/")[-1])[1]
+        if not file_ext:
+            file_ext = ".png"
+
+        # Generate a unique filename using timestamp
+        timestamp = int(time.time())
+        name = f"image_{timestamp}{file_ext}"
+        f_name = os.path.join(assets_dir, name)
+
+        try:
+            with open(f_name, "wb") as f:
+                f.write(resource.read())
+        except Exception as e:
+            raise FileSystemError(
+                f"Failed to save image to {f_name}: {str(e)}")
+
+        return f_name
+
+    except Exception as e:
+        error_handler.handle_error(e, {
+            "img_url": img_url,
+            "source_dir": source_dir
+        })
+        raise
 
 
 class MarkdownBody:
@@ -265,45 +297,86 @@ class MarkdownFile:
     def download_image_from_web(self):
         """Download image from web and save to assets directory"""
         imgRefs = [imgRef for imgRef in self.image_pairs if imgRef.external]
+        download_errors = []
+
         for imgRef in imgRefs:
-            f_name = ""
-            content = None
             try:
-                resource = urllib.request.urlopen(imgRef.url_in_text)
-                content = resource.read()
-            except Exception as e:
-                print(
-                    f"Error downloading image {imgRef.url_in_text} from web: {e}")
-                continue
-            if content:
-                imgRef.existed = True
                 # Create assets directory if it doesn't exist
                 assets_dir = os.path.join(self.source_dir, "assets")
-                os.makedirs(assets_dir, exist_ok=True)
+                try:
+                    os.makedirs(assets_dir, exist_ok=True)
+                except Exception as e:
+                    raise FileSystemError(
+                        f"Failed to create assets directory: {str(e)}")
 
-                # Get file extension from URL or default to .png
-                file_ext = os.path.splitext(
-                    imgRef.url_in_text.split("/")[-1])[1]
-                if not file_ext:
-                    file_ext = ".png"
+                try:
+                    resource = urllib.request.urlopen(imgRef.url_in_text)
+                    content = resource.read()
+                except Exception as e:
+                    raise ImageError(
+                        f"Failed to download image from {imgRef.url_in_text}: {str(e)}")
 
-                # Generate a unique filename using timestamp
-                timestamp = int(time.time())
-                name = f"image_{timestamp}{file_ext}"
-                f_name = os.path.join(assets_dir, name)
+                if content:
+                    imgRef.existed = True
+                    # Get file extension from URL or default to .png
+                    file_ext = os.path.splitext(
+                        imgRef.url_in_text.split("/")[-1])[1]
+                    if not file_ext:
+                        file_ext = ".png"
 
-                with open(f_name, "wb") as f:
-                    f.write(content)
-                    imgRef.original_path = f_name
-            else:
-                imgRef.existed = False
+                    # Generate a unique filename using timestamp
+                    timestamp = int(time.time())
+                    name = f"image_{timestamp}{file_ext}"
+                    f_name = os.path.join(assets_dir, name)
+
+                    try:
+                        with open(f_name, "wb") as f:
+                            f.write(content)
+                        imgRef.original_path = f_name
+                    except Exception as e:
+                        raise FileSystemError(
+                            f"Failed to save image to {f_name}: {str(e)}")
+                else:
+                    imgRef.existed = False
+                    download_errors.append(imgRef.url_in_text)
+
+            except Exception as e:
+                error_handler.handle_error(e, {
+                    "img_url": imgRef.url_in_text,
+                    "source_dir": self.source_dir
+                })
+                download_errors.append(imgRef.url_in_text)
+                continue
+
+        if download_errors:
+            raise ImageError(
+                f"Failed to download {len(download_errors)} images",
+                ErrorLevel.WARNING
+            )
 
     def use_temp_img_for_unavailable_img(self):
         """Use temp image for unavailable image"""
+        unavailable_count = 0
         for imgRef in self.image_pairs:
             if not imgRef.existed:
-                imgRef.original_path = f"assets/img_unavailable.png"
+                temp_img_path = os.path.join("assets", "img_unavailable.png")
+                if not os.path.exists(temp_img_path):
+                    raise FileSystemError(
+                        f"Default unavailable image not found: {temp_img_path}",
+                        ErrorLevel.ERROR
+                    )
+                imgRef.original_path = temp_img_path
                 imgRef.existed = True
+                unavailable_count += 1
+
+        if unavailable_count > 0:
+            error_handler.handle_error(
+                ImageError(
+                    f"Replaced {unavailable_count} unavailable images with default image",
+                    ErrorLevel.WARNING
+                ),
+                {"file": self.abs_path}
+            )
 
 
 @dataclass

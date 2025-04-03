@@ -4,6 +4,7 @@ import pickle
 from pathlib import Path
 import shutil
 from wx.wx_cache import WxCache
+from wx.error_handler import FileSystemError
 
 
 @pytest.fixture
@@ -25,16 +26,16 @@ def cache_with_existing_data(temp_dir):
     return WxCache(str(temp_dir))
 
 
-def test_init_with_valid_dir(temp_dir):
+def test_init_with_valid_dir(tmp_path):
     """测试使用有效目录初始化"""
-    cache = WxCache(str(temp_dir))
-    assert cache.ROOT_DIR == str(temp_dir)
-    assert os.path.exists(os.path.join(str(temp_dir), "Cache.bin"))
+    cache = WxCache(str(tmp_path))
+    assert cache.ROOT_DIR == str(tmp_path)
+    assert os.path.exists(cache.CACHE_STORE)
 
 
 def test_init_with_invalid_dir():
     """测试使用无效目录初始化"""
-    with pytest.raises(ValueError, match="Invalid directory path"):
+    with pytest.raises(FileSystemError, match="Directory does not exist"):
         WxCache("/non/existent/directory")
 
 
@@ -42,7 +43,7 @@ def test_init_without_dir_and_env():
     """测试没有目录和环境变量时初始化"""
     if "CD20_ARTICLE_SOURCE" in os.environ:
         del os.environ["CD20_ARTICLE_SOURCE"]
-    with pytest.raises(ValueError, match="root_dir must be provided"):
+    with pytest.raises(FileSystemError, match="root_dir must be provided"):
         WxCache()
 
 
