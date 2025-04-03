@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Test cases for main.py
+Test cases for cli.py
 """
 import pytest
 from pathlib import Path
-from wx.main import check_missing_images
+from wx.cli import check_missing_images
 from wx.md_file import MarkdownFile
 
 
