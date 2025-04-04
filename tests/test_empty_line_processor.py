@@ -38,3 +38,102 @@ def test_single_line():
     processor = EmptyLineProcessor()
     content = "Single line\n"
     assert processor.process_content(content) == content
+
+
+def test_code_block_preservation():
+    """Test that empty lines in code blocks are preserved."""
+    processor = EmptyLineProcessor()
+    content = (
+        "Before code\n"
+        "\n"
+        "```python\n"
+        "def test():\n"
+        "\n"
+        "    return None\n"
+        "\n"
+        "# Comment\n"
+        "```\n"
+        "\n"
+        "After code"
+    )
+    expected = (
+        "Before code\n"
+        "\n"
+        "```python\n"
+        "def test():\n"
+        "\n"
+        "    return None\n"
+        "\n"
+        "# Comment\n"
+        "```\n"
+        "\n"
+        "After code"
+    )
+    assert processor.process_content(content) == expected
+
+
+def test_list_spacing():
+    """Test that list item spacing is preserved correctly."""
+    processor = EmptyLineProcessor()
+    content = (
+        "# List test\n"
+        "\n"
+        "- Item 1\n"
+        "- Item 2\n"
+        "\n"
+        "- Item 3 (new group)\n"
+        "- Item 4\n"
+        "\n"
+        "\n"
+        "1. Numbered 1\n"
+        "2. Numbered 2\n"
+        "\n"
+        "3. Numbered 3 (new group)\n"
+        "\n"
+        "\n"
+        "Final paragraph"
+    )
+    expected = (
+        "# List test\n"
+        "\n"
+        "- Item 1\n"
+        "- Item 2\n"
+        "\n"
+        "- Item 3 (new group)\n"
+        "- Item 4\n"
+        "\n"
+        "1. Numbered 1\n"
+        "2. Numbered 2\n"
+        "\n"
+        "3. Numbered 3 (new group)\n"
+        "\n"
+        "Final paragraph"
+    )
+    assert processor.process_content(content) == expected
+
+
+def test_front_matter():
+    """Test that front matter is handled correctly."""
+    processor = EmptyLineProcessor()
+    content = (
+        "---\n"
+        "title=\"Test\"\n"
+        "date=\"2024-04-04\"\n"
+        "---\n"
+        "\n"
+        "\n"
+        "First paragraph\n"
+        "\n"
+        "Second paragraph"
+    )
+    expected = (
+        "---\n"
+        "title=\"Test\"\n"
+        "date=\"2024-04-04\"\n"
+        "---\n"
+        "\n"
+        "First paragraph\n"
+        "\n"
+        "Second paragraph"
+    )
+    assert processor.process_content(content) == expected
