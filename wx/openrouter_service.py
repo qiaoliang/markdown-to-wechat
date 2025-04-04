@@ -94,3 +94,73 @@ class OpenRouterService:
                 "..." if len(clean_lines[0]) > 100 else clean_lines[0]
 
         return title
+
+    def summarize_for_subtitle(self, content: str) -> str:
+        """Generate a subtitle/description from the article content.
+
+        Args:
+            content: The full article content including front matter
+
+        Returns:
+            A concise description of the article content in one sentence (max 50 characters)
+        """
+        # Extract content without front matter
+        content_without_front_matter = content.split(
+            "---", 1)[1] if "---" in content else content
+
+        # Clean up the content
+        content_lines = content_without_front_matter.strip().split("\n")
+        # Remove empty lines and clean up markdown headers
+        clean_lines = []
+        for line in content_lines:
+            line = line.strip()
+            if not line:
+                continue
+            # Remove markdown header markers but preserve the text
+            if line.startswith('#'):
+                line = line.lstrip('#').strip()
+            clean_lines.append(line)
+
+        # Take first two paragraphs for context
+        clean_content = " ".join(clean_lines[:10])
+
+        response = self.client.chat.completions.create(
+            model="deepseek/deepseek-v3-base:free",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a subtitle generator. Generate ONLY a single sentence description (max 50 characters) that captures the essence of the article. The description must be in English and should not include any markdown, quotes, or additional formatting."
+                },
+                {
+                    "role": "user",
+                    "content": clean_content
+                }
+            ],
+            temperature=0.3,  # Lower temperature for more focused output
+            max_tokens=15,    # Limit response length for shorter description
+            top_p=0.8,       # More focused token selection
+            frequency_penalty=0.0  # No need for frequency penalty in short description
+        )
+
+        subtitle = response.choices[0].message.content.strip()
+
+        # Clean up the subtitle
+        subtitle = (subtitle
+                    .replace('#', '')
+                    .replace('`', '')
+                    .replace('"', '')
+                    .replace("'", "")
+                    .replace("\n", " ")  # Replace newlines with spaces
+                    .strip())
+
+        # If subtitle is too long, truncate it
+        if len(subtitle) > 50:
+            subtitle = subtitle[:47] + "..."
+
+        # If subtitle is empty, use the first non-empty line from the content
+        if not subtitle and clean_lines:
+            first_line = clean_lines[0]
+            subtitle = first_line[:47] + \
+                "..." if len(first_line) > 50 else first_line
+
+        return subtitle

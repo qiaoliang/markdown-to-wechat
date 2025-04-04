@@ -1,5 +1,6 @@
 import pytest
 from wx.openrouter_service import OpenRouterService
+from unittest.mock import MagicMock, patch
 
 
 @pytest.fixture
@@ -45,6 +46,14 @@ def openrouter_service(monkeypatch):
     return OpenRouterService()
 
 
+@pytest.fixture
+def mock_openai():
+    with patch('wx.openrouter_service.OpenAI') as mock:
+        mock_client = MagicMock()
+        mock.return_value = mock_client
+        yield mock_client
+
+
 def test_init_without_api_key(monkeypatch):
     monkeypatch.delenv('OPENROUTER_API_KEY', raising=False)
     with pytest.raises(ValueError) as exc:
@@ -53,29 +62,136 @@ def test_init_without_api_key(monkeypatch):
         exc.value)
 
 
-def test_summarize_for_title(mocker, openrouter_service, sample_article_content, mock_openai_response):
-    # Mock the OpenAI client's create method
-    mock_create = mocker.patch.object(
-        openrouter_service.client.chat.completions,
-        'create',
-        return_value=mock_openai_response
-    )
+def test_summarize_for_title(mock_openai):
+    """Test title generation with mocked OpenAI client."""
+    # Setup mock response
+    mock_response = MagicMock()
+    mock_response.choices = [
+        MagicMock(message=MagicMock(
+            content="Understanding Async IO in Python: A Comprehensive Guide"))
+    ]
+    mock_openai.chat.completions.create.return_value = mock_response
 
-    title = openrouter_service.summarize_for_title(sample_article_content)
+    # Test content
+    content = """title=""
+subtitle=""
+tags=[]
+categories=[]
+keywords=[]
+---
+# Understanding Python's Async IO
+Python's asynchronous IO system is a powerful way to handle concurrent operations.
+This article explains the core concepts and best practices for using async/await in Python.
 
-    assert title == "Understanding Async IO in Python: A Comprehensive Guide"
-    assert mock_create.call_count == 1, "chat.completions.create should be called exactly once"
+## Key Concepts
+- Coroutines
+- Event Loop
+- Async/Await Syntax"""
 
-    # Get and print the actual call arguments for debugging
-    call_args = mock_create.call_args
-    assert call_args is not None, "Expected create method to be called"
+    service = OpenRouterService()
+    title = service.summarize_for_title(content)
 
-    # Verify the model and messages
-    kwargs = call_args.kwargs
-    assert kwargs['model'] == "deepseek/deepseek-v3-base:free"
-    assert len(kwargs['messages']) == 1
+    # Verify the title
+    assert isinstance(title, str)
+    assert len(title) <= 100  # Title should be within length limit
+    assert "Python" in title  # Should contain relevant keyword
 
-    message_content = kwargs['messages'][0]['content']
-    assert "Create a title" in message_content
-    assert "highlight key points" in message_content
-    assert "attract readers" in message_content
+    # Verify OpenAI client was called correctly
+    mock_openai.chat.completions.create.assert_called_once()
+    call_args = mock_openai.chat.completions.create.call_args[1]
+    assert call_args['model'] == "deepseek/deepseek-v3-base:free"
+    assert len(call_args['messages']) == 2
+    assert call_args['messages'][0]['role'] == "system"
+    assert "title generator" in call_args['messages'][0]['content'].lower()
+    assert call_args['max_tokens'] == 20  # Should use limited tokens for title
+
+
+def test_summarize_for_subtitle(mock_openai):
+    """Test subtitle generation with mocked OpenAI client."""
+    # Setup mock response
+    mock_response = MagicMock()
+    mock_response.choices = [
+        MagicMock(message=MagicMock(
+            content="A guide to Python's async/await system"))
+    ]
+    mock_openai.chat.completions.create.return_value = mock_response
+
+    # Test content
+    content = """title=""
+subtitle=""
+tags=[]
+categories=[]
+keywords=[]
+---
+# Understanding Python's Async IO
+Python's asynchronous IO system is a powerful way to handle concurrent operations.
+This article explains the core concepts and best practices for using async/await in Python.
+
+## Key Concepts
+- Coroutines
+- Event Loop
+- Async/Await Syntax"""
+
+    service = OpenRouterService()
+    subtitle = service.summarize_for_subtitle(content)
+
+    # Verify the subtitle
+    assert isinstance(subtitle, str)
+    assert len(subtitle) <= 50  # Subtitle should be within length limit
+    assert "Python" in subtitle  # Should contain relevant keyword
+
+    # Verify OpenAI client was called correctly
+    mock_openai.chat.completions.create.assert_called_once()
+    call_args = mock_openai.chat.completions.create.call_args[1]
+    assert call_args['model'] == "deepseek/deepseek-v3-base:free"
+    assert len(call_args['messages']) == 2
+    assert call_args['messages'][0]['role'] == "system"
+    assert "subtitle generator" in call_args['messages'][0]['content'].lower()
+    # Should use limited tokens for subtitle
+    assert call_args['max_tokens'] == 15
+
+
+def test_summarize_for_subtitle_long_input(mock_openai):
+    """Test subtitle generation with long input content."""
+    # Setup mock response with a long subtitle
+    mock_response = MagicMock()
+    mock_response.choices = [
+        MagicMock(message=MagicMock(
+            content="This is a very long subtitle that exceeds the maximum allowed length of fifty characters"))
+    ]
+    mock_openai.chat.completions.create.return_value = mock_response
+
+    # Test content with multiple paragraphs
+    content = """title=""
+subtitle=""
+tags=[]
+categories=[]
+keywords=[]
+---
+# Understanding Python's Async IO
+Python's asynchronous IO system is a powerful way to handle concurrent operations.
+This article explains the core concepts and best practices for using async/await in Python.
+
+## Key Concepts
+- Coroutines
+- Event Loop
+- Async/Await Syntax
+
+## Benefits
+1. Better performance for IO-bound operations
+2. Clean and readable code
+3. Efficient resource utilization
+
+## Advanced Topics
+- Error handling in async code
+- Async context managers
+- Task cancellation
+- Debugging async applications"""
+
+    service = OpenRouterService()
+    subtitle = service.summarize_for_subtitle(content)
+
+    # Verify the subtitle
+    assert isinstance(subtitle, str)
+    assert len(subtitle) <= 50  # Should be truncated to fit length limit
+    assert subtitle.endswith("...")  # Should end with ellipsis if truncated
