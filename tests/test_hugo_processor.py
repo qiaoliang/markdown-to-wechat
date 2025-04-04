@@ -621,3 +621,135 @@ def test_copy_image_files_name_conflict(tmp_path):
     # Verify the mappings
     assert image_mapping1 == {"images/test.jpg": "/img/blog/post1/test.jpg"}
     assert image_mapping2 == {"images/test.jpg": "/img/blog/post2/test.jpg"}
+
+
+def test_update_image_references_basic(tmp_path):
+    """Test basic image reference updating functionality."""
+    # Setup
+    content = """# Test Document
+![Test Image](images/test.jpg)
+Some text here
+![Another Image](path/to/image.png)
+"""
+    path_mapping = {
+        "images/test.jpg": "/img/blog/test.jpg",
+        "path/to/image.png": "/img/blog/images/image.png"
+    }
+
+    # Create processor
+    processor = HugoProcessor({
+        'source_dir': str(tmp_path),
+        'target_dir': str(tmp_path / "target"),
+        'image_dir': str(tmp_path / "images")
+    })
+
+    # Act
+    updated_content = processor.update_image_references(content, path_mapping)
+
+    # Assert
+    expected = """# Test Document
+![Test Image](/img/blog/test.jpg)
+Some text here
+![Another Image](/img/blog/images/image.png)
+"""
+    assert updated_content == expected
+
+
+def test_update_image_references_with_html(tmp_path):
+    """Test updating HTML image references."""
+    # Setup
+    content = """# Test Document
+<img src="images/test.jpg" alt="Test Image">
+Some text here
+<img src='path/to/image.png' alt='Another Image' class="large">
+"""
+    path_mapping = {
+        "images/test.jpg": "/img/blog/test.jpg",
+        "path/to/image.png": "/img/blog/images/image.png"
+    }
+
+    # Create processor
+    processor = HugoProcessor({
+        'source_dir': str(tmp_path),
+        'target_dir': str(tmp_path / "target"),
+        'image_dir': str(tmp_path / "images")
+    })
+
+    # Act
+    updated_content = processor.update_image_references(content, path_mapping)
+
+    # Assert
+    expected = """# Test Document
+<img src="/img/blog/test.jpg" alt="Test Image">
+Some text here
+<img src='/img/blog/images/image.png' alt='Another Image' class="large">
+"""
+    assert updated_content == expected
+
+
+def test_update_image_references_mixed_format(tmp_path):
+    """Test updating both Markdown and HTML image references."""
+    # Setup
+    content = """# Test Document
+![Test Image](images/test.jpg)
+Some text here
+<img src="path/to/image.png" alt="Another Image">
+More text
+![Third Image](images/third.gif)
+"""
+    path_mapping = {
+        "images/test.jpg": "/img/blog/test.jpg",
+        "path/to/image.png": "/img/blog/images/image.png",
+        "images/third.gif": "/img/blog/third.gif"
+    }
+
+    # Create processor
+    processor = HugoProcessor({
+        'source_dir': str(tmp_path),
+        'target_dir': str(tmp_path / "target"),
+        'image_dir': str(tmp_path / "images")
+    })
+
+    # Act
+    updated_content = processor.update_image_references(content, path_mapping)
+
+    # Assert
+    expected = """# Test Document
+![Test Image](/img/blog/test.jpg)
+Some text here
+<img src="/img/blog/images/image.png" alt="Another Image">
+More text
+![Third Image](/img/blog/third.gif)
+"""
+    assert updated_content == expected
+
+
+def test_update_image_references_preserves_unmapped(tmp_path):
+    """Test that unmapped image references are preserved as-is."""
+    # Setup
+    content = """# Test Document
+![Test Image](images/test.jpg)
+![Unmapped Image](images/unmapped.jpg)
+<img src="path/to/unmapped.png" alt="Another Unmapped">
+"""
+    path_mapping = {
+        "images/test.jpg": "/img/blog/test.jpg"
+    }
+
+    # Create processor
+    processor = HugoProcessor({
+        'source_dir': str(tmp_path),
+        'target_dir': str(tmp_path / "target"),
+        'image_dir': str(tmp_path / "images")
+    })
+
+    # Act
+    updated_content = processor.update_image_references(content, path_mapping)
+
+    # Assert
+    expected = """# Test Document
+![Test Image](/img/blog/test.jpg)
+![Unmapped Image](images/unmapped.jpg)
+<img src="path/to/unmapped.png" alt="Another Unmapped">
+"""
+    assert updated_content == expected

@@ -375,3 +375,39 @@ class HugoProcessor:
                         f"Copied image {img_path} to {target_path}")
 
         return path_mapping
+
+    def update_image_references(self, content: str, path_mapping: Dict[str, str]) -> str:
+        """
+        Update image references in content based on the provided path mapping.
+
+        Args:
+            content: The markdown content containing image references
+            path_mapping: Dictionary mapping original image paths to new Hugo paths
+
+        Returns:
+            Updated content with new image paths
+        """
+        # Update Markdown image references
+        for old_path, new_path in path_mapping.items():
+            # Escape special characters in the old path for regex
+            escaped_old_path = re.escape(old_path)
+            # Update Markdown format: ![alt](path)
+            content = re.sub(
+                f'!\\[([^\\]]*)\\]\\({escaped_old_path}\\)',
+                f'![\\1]({new_path})',
+                content
+            )
+            # Update HTML format with double quotes: <img src="path" ...>
+            content = re.sub(
+                f'<img([^>]*?)src="{escaped_old_path}"([^>]*?)>',
+                f'<img\\1src="{new_path}"\\2>',
+                content
+            )
+            # Update HTML format with single quotes: <img src='path' ...>
+            content = re.sub(
+                f"<img([^>]*?)src='{escaped_old_path}'([^>]*?)>",
+                f"<img\\1src='{new_path}'\\2>",
+                content
+            )
+
+        return content
