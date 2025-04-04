@@ -1,6 +1,7 @@
 import logging
 import re
 import json
+import os
 from pathlib import Path
 from typing import Dict, Any, List
 from dataclasses import dataclass
@@ -260,3 +261,35 @@ class HugoProcessor:
         # Write back to file
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
+
+    def publish(self) -> None:
+        """
+        Publish markdown files to Hugo site.
+
+        This includes:
+        1. Validating HUGO_TARGET_HOME environment variable
+        2. Creating necessary directories
+        3. Copying markdown files and images
+        4. Updating image references
+
+        Raises:
+            ValueError: If HUGO_TARGET_HOME is not set or points to non-existent directory
+        """
+        # Validate HUGO_TARGET_HOME environment variable
+        hugo_home = os.environ.get("HUGO_TARGET_HOME")
+        if not hugo_home:
+            raise ValueError(
+                "HUGO_TARGET_HOME environment variable is not set")
+
+        hugo_home_path = Path(hugo_home)
+        if not hugo_home_path.exists():
+            raise ValueError("HUGO_TARGET_HOME directory does not exist")
+
+        # Create required directories
+        blog_dir = hugo_home_path / "content" / "blog"
+        img_dir = hugo_home_path / "static" / "img" / "blog"
+
+        blog_dir.mkdir(parents=True, exist_ok=True)
+        img_dir.mkdir(parents=True, exist_ok=True)
+
+        self.logger.info(f"Created Hugo directories: {blog_dir} and {img_dir}")

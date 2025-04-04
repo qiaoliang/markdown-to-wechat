@@ -342,3 +342,60 @@ def test_process_file_with_empty_lines():
         temp.seek(0)
         result = temp.read()
         assert result == expected
+
+
+def test_publish_without_hugo_target_home():
+    """Test publishing fails when HUGO_TARGET_HOME environment variable is not set."""
+    # Arrange
+    if "HUGO_TARGET_HOME" in os.environ:
+        del os.environ["HUGO_TARGET_HOME"]
+
+    processor = HugoProcessor({
+        'source_dir': '/path/to/source',
+        'target_dir': '/path/to/target',
+        'image_dir': '/path/to/images'
+    })
+
+    # Act & Assert
+    with pytest.raises(ValueError) as exc_info:
+        processor.publish()
+    assert "HUGO_TARGET_HOME environment variable is not set" in str(
+        exc_info.value)
+
+
+def test_publish_with_invalid_hugo_target_home():
+    """Test publishing fails when HUGO_TARGET_HOME points to non-existent directory."""
+    # Arrange
+    os.environ["HUGO_TARGET_HOME"] = "/non/existent/path"
+    processor = HugoProcessor({
+        'source_dir': '/path/to/source',
+        'target_dir': '/path/to/target',
+        'image_dir': '/path/to/images'
+    })
+
+    # Act & Assert
+    with pytest.raises(ValueError) as exc_info:
+        processor.publish()
+    assert "HUGO_TARGET_HOME directory does not exist" in str(exc_info.value)
+
+
+def test_publish_with_valid_hugo_target_home():
+    """Test publishing succeeds with valid HUGO_TARGET_HOME and creates required directories."""
+    # Arrange
+    with tempfile.TemporaryDirectory() as hugo_home:
+        os.environ["HUGO_TARGET_HOME"] = hugo_home
+        processor = HugoProcessor({
+            'source_dir': '/path/to/source',
+            'target_dir': '/path/to/target',
+            'image_dir': '/path/to/images'
+        })
+
+        # Act
+        processor.publish()
+
+        # Assert
+        blog_dir = Path(hugo_home) / "content" / "blog"
+        img_dir = Path(hugo_home) / "static" / "img" / "blog"
+
+        assert blog_dir.exists(), "Blog directory was not created"
+        assert img_dir.exists(), "Image directory was not created"
