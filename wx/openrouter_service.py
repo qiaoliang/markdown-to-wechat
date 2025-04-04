@@ -1,6 +1,6 @@
 import os
 from openai import OpenAI
-from typing import Optional
+from typing import Optional, List
 
 
 class OpenRouterService:
@@ -170,3 +170,88 @@ class OpenRouterService:
                 subtitle = first_line + "."
 
         return subtitle
+
+    def generate_tags(self, content: str) -> List[str]:
+        """Generate three relevant tags from the article content.
+
+        Args:
+            content: The full article content including front matter
+
+        Returns:
+            A list of three tags that best represent the article's topics
+        """
+        # Extract content without front matter
+        content_without_front_matter = content.split(
+            "---", 1)[1] if "---" in content else content
+
+        # Clean up the content
+        content_lines = content_without_front_matter.strip().split("\n")
+        # Remove empty lines and clean up markdown headers
+        clean_lines = []
+        for line in content_lines:
+            line = line.strip()
+            if not line:
+                continue
+            # Remove markdown header markers but preserve the text
+            if line.startswith('#'):
+                line = line.lstrip('#').strip()
+            clean_lines.append(line)
+
+        # Take first three paragraphs for context
+        clean_content = " ".join(clean_lines[:15])
+
+        response = self.client.chat.completions.create(
+            model="deepseek/deepseek-v3-base:free",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a tag generator. Generate EXACTLY three relevant tags that best represent the article's topics. Return ONLY the tags in a comma-separated format. Each tag should be a single word or short phrase (2-3 words max). The tags should be specific, relevant, and helpful for categorization."
+                },
+                {
+                    "role": "user",
+                    "content": clean_content
+                }
+            ],
+            temperature=0.3,  # Lower temperature for more focused output
+            max_tokens=20,    # Limit response length
+            top_p=0.8,       # More focused token selection
+            frequency_penalty=0.0  # No need for frequency penalty in tags
+        )
+
+        tags_text = response.choices[0].message.content.strip()
+
+        # Split the comma-separated tags and clean them
+        raw_tags = [tag.strip() for tag in tags_text.split(',')]
+
+        # Clean and format each tag
+        tags = []
+        for tag in raw_tags:
+            # Remove any quotes or special characters
+            clean_tag = (tag
+                         .replace('"', '')
+                         .replace("'", "")
+                         .replace("[", "")
+                         .replace("]", "")
+                         .strip())
+            if clean_tag:
+                tags.append(clean_tag)
+
+        # If we have too many tags, keep only the first 3
+        if len(tags) > 3:
+            tags = tags[:3]
+
+        # If we don't have enough tags, try to extract from content
+        if len(tags) < 3:
+            # First, try to use the first header (title) as a tag
+            if clean_lines and clean_lines[0] not in tags:
+                # Take first 3 words of title
+                title_words = clean_lines[0].split()[:3]
+                title_tag = " ".join(title_words)
+                if title_tag and title_tag not in tags:
+                    tags.append(title_tag)
+
+        # If we still don't have enough tags, add generic ones
+        while len(tags) < 3:
+            tags.append(f"topic-{len(tags)+1}")
+
+        return tags

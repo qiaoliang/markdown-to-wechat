@@ -195,3 +195,108 @@ This article explains the core concepts and best practices for using async/await
     assert isinstance(subtitle, str)
     assert len(subtitle) <= 50  # Should be truncated to fit length limit
     assert subtitle.endswith("...")  # Should end with ellipsis if truncated
+
+
+def test_generate_tags(mock_openai):
+    """Test tag generation with mocked OpenAI client."""
+    # Setup mock response
+    mock_response = MagicMock()
+    mock_response.choices = [
+        MagicMock(message=MagicMock(
+            content="python-async, concurrency, io-operations"))
+    ]
+    mock_openai.chat.completions.create.return_value = mock_response
+
+    # Test content
+    content = """title=""
+subtitle=""
+tags=[]
+categories=[]
+keywords=[]
+---
+# Understanding Python's Async IO
+Python's asynchronous IO system is a powerful way to handle concurrent operations.
+This article explains the core concepts and best practices for using async/await in Python.
+
+## Key Concepts
+- Coroutines
+- Event Loop
+- Async/Await Syntax"""
+
+    service = OpenRouterService()
+    tags = service.generate_tags(content)
+
+    # Verify the tags
+    assert isinstance(tags, list)
+    assert len(tags) == 3  # Should always return exactly 3 tags
+    assert all(isinstance(tag, str)
+               for tag in tags)  # All tags should be strings
+    assert all(tag.strip() == tag for tag in tags)  # Tags should be stripped
+    assert all('"' not in tag for tag in tags)  # No quotes in tags
+    # No brackets
+    assert all('[' not in tag and ']' not in tag for tag in tags)
+
+    # Verify OpenAI client was called correctly
+    mock_openai.chat.completions.create.assert_called_once()
+    call_args = mock_openai.chat.completions.create.call_args[1]
+    assert call_args['model'] == "deepseek/deepseek-v3-base:free"
+    assert len(call_args['messages']) == 2
+    assert call_args['messages'][0]['role'] == "system"
+    assert "tag generator" in call_args['messages'][0]['content'].lower()
+    assert call_args['max_tokens'] == 20  # Should use limited tokens for tags
+
+
+def test_generate_tags_insufficient_response(mock_openai):
+    """Test tag generation when API returns fewer than 3 tags."""
+    # Setup mock response with only one tag
+    mock_response = MagicMock()
+    mock_response.choices = [
+        MagicMock(message=MagicMock(content="python"))
+    ]
+    mock_openai.chat.completions.create.return_value = mock_response
+
+    # Test content
+    content = """title=""
+subtitle=""
+tags=[]
+categories=[]
+keywords=[]
+---
+# Understanding Python
+A basic guide to Python programming."""
+
+    service = OpenRouterService()
+    tags = service.generate_tags(content)
+
+    # Verify we still get exactly 3 tags
+    assert len(tags) == 3
+    assert tags[0] == "python"  # First tag from API
+    assert "Understanding Python" in tags[1]  # Second tag from content
+    assert tags[2].startswith("topic-")  # Third tag is generic
+
+
+def test_generate_tags_excess_response(mock_openai):
+    """Test tag generation when API returns more than 3 tags."""
+    # Setup mock response with 5 tags
+    mock_response = MagicMock()
+    mock_response.choices = [
+        MagicMock(message=MagicMock(
+            content="python, async, io, concurrency, performance"))
+    ]
+    mock_openai.chat.completions.create.return_value = mock_response
+
+    # Test content
+    content = """title=""
+subtitle=""
+tags=[]
+categories=[]
+keywords=[]
+---
+# Python Performance Tips"""
+
+    service = OpenRouterService()
+    tags = service.generate_tags(content)
+
+    # Verify we get exactly 3 tags
+    assert len(tags) == 3
+    assert tags == ["python", "async", "io"]  # Should keep first 3 tags
