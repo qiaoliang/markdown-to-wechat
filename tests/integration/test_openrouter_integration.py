@@ -131,9 +131,9 @@ This article explains the core concepts and best practices for using async/await
     for tag in tags:
         assert isinstance(tag, str)
         assert len(tag) > 0
-        assert len(tag.split()) <= 3  # Each tag should be at most 3 words
-        # Only allow alphanumeric, hyphen and space
-        assert all(c.isalnum() or c in ['-', ' '] for c in tag)
+        assert ' ' not in tag  # No spaces allowed in tags
+        # Only allow alphanumeric and hyphen
+        assert all(c.isalnum() or c == '-' for c in tag)
 
     # The tags should contain relevant keywords
     relevant_terms = ['python', 'async', 'io', 'asynchronous', 'coroutine']

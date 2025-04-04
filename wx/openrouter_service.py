@@ -233,6 +233,13 @@ class OpenRouterService:
                          .replace("[", "")
                          .replace("]", "")
                          .strip())
+            # Replace spaces with hyphens and ensure only allowed characters
+            clean_tag = "-".join(word.strip() for word in clean_tag.split())
+            # Remove any consecutive hyphens
+            while "--" in clean_tag:
+                clean_tag = clean_tag.replace("--", "-")
+            # Remove leading/trailing hyphens
+            clean_tag = clean_tag.strip("-")
             if clean_tag:
                 tags.append(clean_tag)
 
@@ -244,11 +251,18 @@ class OpenRouterService:
         if len(tags) < 3:
             # First, try to use the first header (title) as a tag
             if clean_lines and clean_lines[0] not in tags:
-                # Take first 3 words of title
-                title_words = clean_lines[0].split()[:3]
-                title_tag = " ".join(title_words)
-                if title_tag and title_tag not in tags:
-                    tags.append(title_tag)
+                # Take first word of title or hyphenate multiple words
+                title_words = clean_lines[0].split()
+                if title_words:
+                    title_tag = "-".join(title_words[:3])
+                    # Clean the title tag
+                    title_tag = "".join(
+                        c for c in title_tag if c.isalnum() or c == "-")
+                    while "--" in title_tag:
+                        title_tag = title_tag.replace("--", "-")
+                    title_tag = title_tag.strip("-")
+                    if title_tag and title_tag not in tags:
+                        tags.append(title_tag)
 
         # If we still don't have enough tags, add generic ones
         while len(tags) < 3:
