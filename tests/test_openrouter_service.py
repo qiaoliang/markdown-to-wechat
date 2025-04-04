@@ -406,3 +406,90 @@ def test_suggest_category_max_categories(mock_openai):
     # When we have max categories, should return one of existing categories
     category = service.suggest_category("Some content", existing_categories)
     assert category in existing_categories
+
+
+def test_generate_seo_keywords(mock_openai):
+    """Test SEO keywords generation with mocked OpenAI client."""
+    # Setup mock response
+    mock_response = MagicMock()
+    mock_response.choices = [
+        MagicMock(message=MagicMock(
+            content="python programming, async io, concurrency, coroutines, event loop, async await, performance optimization, io bound operations, clean code, resource utilization, asynchronous programming, python async, python development, software engineering, best practices"))
+    ]
+    mock_openai.chat.completions.create.return_value = mock_response
+
+    # Test content
+    content = """title=""
+subtitle=""
+tags=[]
+categories=[]
+keywords=[]
+---
+# Understanding Python's Async IO
+Python's asynchronous IO system is a powerful way to handle concurrent operations.
+This article explains the core concepts and best practices for using async/await in Python.
+
+## Key Concepts
+- Coroutines
+- Event Loop
+- Async/Await Syntax"""
+
+    service = OpenRouterService()
+    keywords = service.generate_seo_keywords(content)
+
+    # Verify the keywords
+    assert isinstance(keywords, list)
+    assert len(keywords) <= 20  # Should not exceed 20 keywords
+    assert len(keywords) > 0    # Should have at least one keyword
+    assert all(isinstance(k, str)
+               for k in keywords)  # All keywords should be strings
+    # Each keyword should be at most 3 words
+    assert all(len(k.split()) <= 3 for k in keywords)
+    assert all(k.strip() == k for k in keywords)  # Keywords should be stripped
+
+    # Keywords should contain relevant terms
+    relevant_terms = ['python', 'async', 'io', 'coroutines']
+    found_relevant = False
+    for keyword in keywords:
+        if any(term.lower() in keyword.lower() for term in relevant_terms):
+            found_relevant = True
+            break
+    assert found_relevant, \
+        f"Keywords {keywords} should contain at least one relevant term from {relevant_terms}"
+
+    # Verify OpenAI client was called correctly
+    mock_openai.chat.completions.create.assert_called_once()
+    call_args = mock_openai.chat.completions.create.call_args[1]
+    assert call_args['model'] == "deepseek/deepseek-v3-base:free"
+    assert len(call_args['messages']) == 2
+    assert call_args['messages'][0]['role'] == "system"
+    assert "seo keywords" in call_args['messages'][0]['content'].lower()
+
+
+def test_generate_seo_keywords_empty_content(mock_openai):
+    """Test SEO keywords generation with empty content."""
+    service = OpenRouterService()
+    keywords = service.generate_seo_keywords("")
+
+    # Should return an empty list for empty content
+    assert isinstance(keywords, list)
+    assert len(keywords) == 0
+
+
+def test_generate_seo_keywords_long_response(mock_openai):
+    """Test SEO keywords generation when API returns too many keywords."""
+    # Setup mock response with many keywords
+    mock_response = MagicMock()
+    mock_response.choices = [
+        MagicMock(message=MagicMock(
+            content="k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11, k12, k13, k14, k15, k16, k17, k18, k19, k20, k21, k22, k23, k24, k25"))
+    ]
+    mock_openai.chat.completions.create.return_value = mock_response
+
+    service = OpenRouterService()
+    keywords = service.generate_seo_keywords("Some content")
+
+    # Should limit to 20 keywords
+    assert len(keywords) == 20
+    # Keywords should be unique
+    assert len(set(keywords)) == len(keywords)
