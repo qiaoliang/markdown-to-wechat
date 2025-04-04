@@ -487,3 +487,137 @@ date="2024-04-04"
                     "notes.txt").exists(), "Text file was copied"
         assert not (hugo_blog_dir /
                     "data.json").exists(), "JSON file was copied"
+
+
+def test_copy_image_files_basic(tmp_path):
+    """Test basic image file copying functionality."""
+    # Setup test environment
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    img_dir = source_dir / "images"
+    img_dir.mkdir()
+
+    # Create test image
+    test_img = img_dir / "test.jpg"
+    test_img.write_bytes(b"fake image content")
+
+    # Create markdown file with image reference
+    md_content = "![Test Image](images/test.jpg)"
+    md_file = source_dir / "test.md"
+    md_file.write_text(md_content)
+
+    # Setup Hugo processor
+    hugo_home = tmp_path / "hugo"
+    hugo_home.mkdir()
+    os.environ["HUGO_TARGET_HOME"] = str(hugo_home)
+
+    config = {
+        'source_dir': str(source_dir),
+        'target_dir': str(hugo_home / "content" / "blog"),
+        'image_dir': str(hugo_home / "static" / "img" / "blog")
+    }
+    processor = HugoProcessor(config)
+
+    # Act
+    image_mapping = processor.copy_image_files(md_file)
+
+    # Assert
+    expected_img_path = hugo_home / "static" / "img" / "blog" / "test.jpg"
+    assert expected_img_path.exists()
+    assert image_mapping == {"images/test.jpg": "/img/blog/test.jpg"}
+    assert expected_img_path.read_bytes() == b"fake image content"
+
+
+def test_copy_image_files_nested_structure(tmp_path):
+    """Test copying images while maintaining directory structure."""
+    # Setup test environment
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    nested_dir = source_dir / "posts" / "2024" / "images"
+    nested_dir.mkdir(parents=True)
+
+    # Create test image in nested directory
+    test_img = nested_dir / "test.jpg"
+    test_img.write_bytes(b"nested image content")
+
+    # Create markdown file with image reference
+    md_content = "![Nested Image](images/test.jpg)"
+    md_file = source_dir / "posts" / "2024" / "article.md"
+    md_file.parent.mkdir(parents=True, exist_ok=True)
+    md_file.write_text(md_content)
+
+    # Setup Hugo processor
+    hugo_home = tmp_path / "hugo"
+    hugo_home.mkdir()
+    os.environ["HUGO_TARGET_HOME"] = str(hugo_home)
+
+    config = {
+        'source_dir': str(source_dir),
+        'target_dir': str(hugo_home / "content" / "blog"),
+        'image_dir': str(hugo_home / "static" / "img" / "blog")
+    }
+    processor = HugoProcessor(config)
+
+    # Act
+    image_mapping = processor.copy_image_files(md_file)
+
+    # Assert
+    expected_img_path = hugo_home / "static" / "img" / "blog" / "posts" / "test.jpg"
+    assert expected_img_path.exists()
+    assert image_mapping == {"images/test.jpg": "/img/blog/posts/test.jpg"}
+    assert expected_img_path.read_bytes() == b"nested image content"
+
+
+def test_copy_image_files_name_conflict(tmp_path):
+    """Test handling of image file name conflicts."""
+    # Setup test environment
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+
+    # Create two different images with the same name in different directories
+    img_dir1 = source_dir / "post1" / "images"
+    img_dir2 = source_dir / "post2" / "images"
+    img_dir1.mkdir(parents=True)
+    img_dir2.mkdir(parents=True)
+
+    test_img1 = img_dir1 / "test.jpg"
+    test_img2 = img_dir2 / "test.jpg"
+    test_img1.write_bytes(b"image content 1")
+    test_img2.write_bytes(b"image content 2")
+
+    # Create markdown files referencing the images
+    md_file1 = source_dir / "post1" / "article1.md"
+    md_file2 = source_dir / "post2" / "article2.md"
+    md_file1.write_text("![Test Image](images/test.jpg)")
+    md_file2.write_text("![Test Image](images/test.jpg)")
+
+    # Setup Hugo processor
+    hugo_home = tmp_path / "hugo"
+    hugo_home.mkdir()
+    os.environ["HUGO_TARGET_HOME"] = str(hugo_home)
+
+    config = {
+        'source_dir': str(source_dir),
+        'target_dir': str(hugo_home / "content" / "blog"),
+        'image_dir': str(hugo_home / "static" / "img" / "blog")
+    }
+    processor = HugoProcessor(config)
+
+    # Act
+    image_mapping1 = processor.copy_image_files(md_file1)
+    image_mapping2 = processor.copy_image_files(md_file2)
+
+    # Assert
+    img_dir = hugo_home / "static" / "img" / "blog"
+    assert (img_dir / "post1" / "test.jpg").exists()
+    assert (img_dir / "post2" / "test.jpg").exists()
+
+    # Verify the content of both images was preserved
+    img1_path = img_dir / "post1" / "test.jpg"
+    img2_path = img_dir / "post2" / "test.jpg"
+    assert img1_path.read_bytes() == b"image content 1"
+    assert img2_path.read_bytes() == b"image content 2"
+
+    # Verify the mappings
+    assert image_mapping1 == {"images/test.jpg": "/img/blog/post1/test.jpg"}
+    assert image_mapping2 == {"images/test.jpg": "/img/blog/post2/test.jpg"}

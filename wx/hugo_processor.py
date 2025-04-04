@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Dict, Any, List
 from dataclasses import dataclass
 from .empty_line_processor import EmptyLineProcessor
+from .image_reference import extract_image_references
 
 
 @dataclass
@@ -307,3 +308,70 @@ class HugoProcessor:
             # Copy the file
             target_path.write_text(file_path.read_text())
             self.logger.info(f"Copied {relative_path} to {target_path}")
+
+    def copy_image_files(self, md_file: Path) -> Dict[str, str]:
+        """
+        Copy image files referenced in a markdown file to the Hugo static directory.
+
+        Args:
+            md_file: Path to the markdown file
+
+        Returns:
+            Dictionary mapping original image paths to new Hugo paths
+        """
+        # Read markdown content
+        content = md_file.read_text()
+
+        # Extract image references
+        image_refs = extract_image_references(content)
+
+        # Initialize path mapping
+        path_mapping = {}
+
+        # Get relative directory for nested structure
+        relative_dir = md_file.parent.relative_to(
+            Path(self.config['source_dir']))
+
+        # Process each image reference
+        for ref in image_refs:
+            # Skip external images
+            if not ref.path.startswith(('http://', 'https://')):
+                # Resolve image path relative to markdown file
+                img_path = (md_file.parent / ref.path).resolve()
+                if img_path.exists():
+                    # Create target directory if it doesn't exist
+                    target_dir = Path(self.config['image_dir'])
+                    if str(relative_dir) != '.':
+                        # Use first directory level
+                        target_dir = target_dir / \
+                            str(relative_dir).split('/')[0]
+                    target_dir.mkdir(parents=True, exist_ok=True)
+
+                    # Generate unique filename if needed
+                    base_name = img_path.stem
+                    extension = img_path.suffix
+                    target_path = target_dir / f"{base_name}{extension}"
+                    counter = 1
+
+                    while target_path.exists():
+                        # If file exists but has same content, reuse it
+                        if target_path.read_bytes() == img_path.read_bytes():
+                            break
+                        # Otherwise, create a new file with incremented counter
+                        target_path = target_dir / \
+                            f"{base_name}_{counter}{extension}"
+                        counter += 1
+
+                    # Copy the file
+                    import shutil
+                    shutil.copy2(img_path, target_path)
+
+                    # Add to path mapping
+                    relative_target = target_path.relative_to(
+                        Path(self.config['image_dir']))
+                    path_mapping[ref.path] = f"/img/blog/{relative_target}"
+
+                    self.logger.info(
+                        f"Copied image {img_path} to {target_path}")
+
+        return path_mapping
