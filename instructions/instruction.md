@@ -51,12 +51,12 @@ Develop a Markdown toolset using Python 3.12. The tool allows users to perform o
   
 
 ## Technical Frameworks
-- **Testing**: Use `pytest` as the testing framework.
+- **Testing**: Use `pytest` as the testing framework, 不要使用 unittest package. 如果使用mock，请使用 pytest 提供的相关API。
 - **Project Management**: Use `poetry` for project building and management.
 - **Markdown Conversion**: Use the `markdown` package to convert Markdown to HTML.
 - **Storage**: Use the `pickle` package for storage management.
 - **WeChat Communication**: Use the WeRobot framework() to communicate with the WeChat official account platform.
-- ** OpenRouter**: Use openRouter and free LLM named `deepseek/deepseek-v3-base:free` to summarize doc for title, subtitle, and keyword and categary, find SEO keywords. Get the openRouter API Key from system environment variable 'OPENROUTER_API_KEY'. 
+- **OpenRouter**: Use openRouter and free LLM named `deepseek/deepseek-v3-base:free` to summarize doc for title, subtitle, and keyword and categary, find SEO keywords. Get the openRouter API Key from system environment variable 'OPENROUTER_API_KEY'. 
 
 ## Documentation
 ### **Hugo Front - Format**: The front - matter formatter for Hugo can be applied to Markdown files for WeChat articles. Refer to [Hugo's Archetypes documentation](https://gohugo.io/content-management/archetypes/) for more details.
