@@ -293,3 +293,17 @@ class HugoProcessor:
         img_dir.mkdir(parents=True, exist_ok=True)
 
         self.logger.info(f"Created Hugo directories: {blog_dir} and {img_dir}")
+
+        # Copy markdown files
+        source_path = Path(self.config['source_dir'])
+        for file_path in source_path.rglob("*.md"):
+            # Get relative path from source directory
+            relative_path = file_path.relative_to(source_path)
+            target_path = blog_dir / relative_path
+
+            # Create parent directories if they don't exist
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Copy the file
+            target_path.write_text(file_path.read_text())
+            self.logger.info(f"Copied {relative_path} to {target_path}")

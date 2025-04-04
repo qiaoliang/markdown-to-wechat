@@ -399,3 +399,91 @@ def test_publish_with_valid_hugo_target_home():
 
         assert blog_dir.exists(), "Blog directory was not created"
         assert img_dir.exists(), "Image directory was not created"
+
+
+def test_publish_copies_markdown_files():
+    """Test that publish copies markdown files to the Hugo blog directory."""
+    # Arrange
+    with tempfile.TemporaryDirectory() as source_dir, \
+            tempfile.TemporaryDirectory() as hugo_home:
+
+        # Create test markdown files
+        source_path = Path(source_dir)
+        test_files = [
+            "article1.md",
+            "subfolder/article2.md",
+            "deep/nested/article3.md"
+        ]
+
+        # Create the files with some content
+        for file_path in test_files:
+            full_path = source_path / file_path
+            full_path.parent.mkdir(parents=True, exist_ok=True)
+            full_path.write_text("""---
+title="Test Article"
+date="2024-04-04"
+---
+# Test content
+""")
+
+        # Set up HugoProcessor
+        os.environ["HUGO_TARGET_HOME"] = hugo_home
+        processor = HugoProcessor({
+            'source_dir': str(source_path),
+            'target_dir': '/tmp',  # Not used in this test
+            'image_dir': '/tmp'    # Not used in this test
+        })
+
+        # Act
+        processor.publish()
+
+        # Assert
+        hugo_blog_dir = Path(hugo_home) / "content" / "blog"
+        for file_path in test_files:
+            target_path = hugo_blog_dir / file_path
+            assert target_path.exists(), f"File {file_path} was not copied"
+            assert target_path.read_text() == (source_path / file_path).read_text(), \
+                f"Content mismatch for {file_path}"
+
+
+def test_publish_skips_non_markdown_files():
+    """Test that publish only copies markdown files and skips others."""
+    # Arrange
+    with tempfile.TemporaryDirectory() as source_dir, \
+            tempfile.TemporaryDirectory() as hugo_home:
+
+        # Create test files
+        source_path = Path(source_dir)
+        markdown_file = source_path / "article.md"
+        text_file = source_path / "notes.txt"
+        json_file = source_path / "data.json"
+
+        # Create the files with some content
+        markdown_file.write_text("""---
+title="Test Article"
+date="2024-04-04"
+---
+# Test content
+""")
+        text_file.write_text("Some notes")
+        json_file.write_text('{"key": "value"}')
+
+        # Set up HugoProcessor
+        os.environ["HUGO_TARGET_HOME"] = hugo_home
+        processor = HugoProcessor({
+            'source_dir': str(source_path),
+            'target_dir': '/tmp',
+            'image_dir': '/tmp'
+        })
+
+        # Act
+        processor.publish()
+
+        # Assert
+        hugo_blog_dir = Path(hugo_home) / "content" / "blog"
+        assert (hugo_blog_dir /
+                "article.md").exists(), "Markdown file was not copied"
+        assert not (hugo_blog_dir /
+                    "notes.txt").exists(), "Text file was copied"
+        assert not (hugo_blog_dir /
+                    "data.json").exists(), "JSON file was copied"
