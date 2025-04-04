@@ -95,3 +95,58 @@ This article explains the core concepts and best practices for using async/await
     # The subtitle should be a complete sentence
     assert subtitle[-1] in '.!?', \
         f"Subtitle '{subtitle}' should end with proper punctuation"
+
+
+@pytest.mark.skip(reason="Integration test that calls OpenRouter API - run manually")
+def test_openrouter_tag_generation():
+    """Integration test for tag generation using real OpenRouter API."""
+    content = """title=""
+subtitle=""
+tags=[]
+categories=[]
+keywords=[]
+---
+# Understanding Python's Async IO
+Python's asynchronous IO system is a powerful way to handle concurrent operations.
+This article explains the core concepts and best practices for using async/await in Python.
+
+## Key Concepts
+- Coroutines
+- Event Loop
+- Async/Await Syntax
+
+## Benefits
+1. Better performance for IO-bound operations
+2. Clean and readable code
+3. Efficient resource utilization"""
+
+    service = OpenRouterService()
+    tags = service.generate_tags(content)
+
+    # Verify we get exactly 3 tags
+    assert isinstance(tags, list)
+    assert len(tags) == 3
+
+    # Verify each tag is a valid string
+    for tag in tags:
+        assert isinstance(tag, str)
+        assert len(tag) > 0
+        assert len(tag.split()) <= 3  # Each tag should be at most 3 words
+        # Only allow alphanumeric, hyphen and space
+        assert all(c.isalnum() or c in ['-', ' '] for c in tag)
+
+    # The tags should contain relevant keywords
+    relevant_terms = ['python', 'async', 'io', 'asynchronous', 'coroutine']
+    found_relevant = False
+    for tag in tags:
+        if any(term.lower() in tag.lower() for term in relevant_terms):
+            found_relevant = True
+            break
+    assert found_relevant, \
+        f"Tags {tags} should contain at least one of these terms: {relevant_terms}"
+
+    # Tags should be unique
+    assert len(set(tags)) == 3, "All tags should be unique"
+
+    # Print tags for manual inspection
+    print(f"\nGenerated tags: {tags}")
