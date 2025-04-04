@@ -1,5 +1,6 @@
 import logging
 import re
+import json
 from pathlib import Path
 from typing import Dict, Any, List
 from dataclasses import dataclass
@@ -126,3 +127,110 @@ class HugoProcessor:
                 ))
 
         return violations
+
+    def standardize_format(self, markdown_file: Path) -> str:
+        """
+        Standardize the format of a markdown file to use key="value" format.
+
+        Args:
+            markdown_file: Path to the markdown file to standardize
+
+        Returns:
+            Standardized content as a string
+
+        Raises:
+            ValueError: If the file is missing front matter
+        """
+        content = markdown_file.read_text()
+        if not content.endswith('\n'):
+            content += '\n'
+        lines = content.splitlines()
+
+        # Check for front matter
+        if not content.startswith(self.FRONT_MATTER_START):
+            raise ValueError("Missing front matter")
+
+        # Find front matter boundaries
+        front_matter_end = -1
+        for i, line in enumerate(lines[1:], 1):
+            if line == self.FRONT_MATTER_START:
+                front_matter_end = i
+                break
+
+        if front_matter_end == -1:
+            raise ValueError("Incomplete front matter: missing closing '---'")
+
+        # Process front matter
+        standardized_lines = [self.FRONT_MATTER_START]
+        for line in lines[1:front_matter_end]:
+            line = line.strip()
+            if not line:
+                continue
+
+            # Skip if already in key="value" format
+            if self.KEY_VALUE_PATTERN.match(line):
+                standardized_lines.append(line)
+                continue
+
+            # Convert key: value format
+            if match := self.KEY_COLON_PATTERN.match(line):
+                key, value = match.groups()
+                standardized_value = self._standardize_value(value.strip())
+                standardized_lines.append(f'{key}={standardized_value}')
+                continue
+
+            # Invalid format, keep as is but log warning
+            self.logger.warning(f"Invalid front matter line format: {line}")
+            standardized_lines.append(line)
+
+        # Add closing front matter marker and remaining content
+        standardized_lines.append(self.FRONT_MATTER_START)
+        if front_matter_end + 1 < len(lines):
+            standardized_lines.extend(lines[front_matter_end + 1:])
+
+        return '\n'.join(standardized_lines) + '\n'
+
+    def _standardize_value(self, value: str) -> str:
+        """
+        Standardize a front matter value to the key="value" format.
+
+        Args:
+            value: The value to standardize
+
+        Returns:
+            Standardized value string
+        """
+        # Remove surrounding quotes if present
+        value = value.strip()
+        if (value.startswith('"') and value.endswith('"')) or \
+           (value.startswith("'") and value.endswith("'")):
+            value = value[1:-1]
+
+        # Handle JSON-like values (lists and objects)
+        if value.startswith('[') or value.startswith('{'):
+            try:
+                # First try to parse with existing quotes
+                try:
+                    parsed = json.loads(value)
+                except json.JSONDecodeError:
+                    # If that fails, try replacing single quotes with double quotes
+                    value = value.replace("'", '"')
+                    # Handle unquoted list items
+                    if value.startswith('['):
+                        value = re.sub(r'\[([^"\]\[]*)\]', lambda m: '[' + ','.join(
+                            f'"{x.strip()}"' for x in m.group(1).split(',')) + ']', value)
+                    # Handle unquoted object keys and values
+                    if value.startswith('{'):
+                        value = re.sub(r'(\{|\,)\s*(\w+):', r'\1"\2":', value)
+                        value = re.sub(r':\s*(\w+)([,\}])', r':"\1"\2', value)
+                    parsed = json.loads(value)
+
+                # For lists and objects, return the JSON string directly
+                return json.dumps(parsed)
+            except json.JSONDecodeError:
+                # If parsing fails, treat as regular string
+                pass
+
+        # For simple values, escape quotes and wrap in double quotes
+        value = value.replace('"', '\\"')
+        return f'"{value}"'
