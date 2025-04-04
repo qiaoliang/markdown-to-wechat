@@ -129,7 +129,7 @@ class OpenRouterService:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a subtitle generator. Generate ONLY a single sentence description (max 50 characters) that captures the essence of the article. The description must be in English and should not include any markdown, quotes, or additional formatting."
+                    "content": "You are a subtitle generator. Generate ONLY a single sentence description (max 50 characters) that captures the essence of the article. The description must be in English, end with a period, and should not include any markdown, quotes, or additional formatting."
                 },
                 {
                     "role": "user",
@@ -153,14 +153,20 @@ class OpenRouterService:
                     .replace("\n", " ")  # Replace newlines with spaces
                     .strip())
 
-        # If subtitle is too long, truncate it
+        # Ensure subtitle ends with proper punctuation
+        if subtitle and subtitle[-1] not in '.!?':
+            subtitle = subtitle + '.'
+
+        # If subtitle is too long after adding punctuation, truncate it and add ellipsis
         if len(subtitle) > 50:
-            subtitle = subtitle[:47] + "..."
+            subtitle = subtitle[:46] + "..."
 
         # If subtitle is empty, use the first non-empty line from the content
         if not subtitle and clean_lines:
             first_line = clean_lines[0]
-            subtitle = first_line[:47] + \
-                "..." if len(first_line) > 50 else first_line
+            if len(first_line) > 46:
+                subtitle = first_line[:46] + "..."
+            else:
+                subtitle = first_line + "."
 
         return subtitle

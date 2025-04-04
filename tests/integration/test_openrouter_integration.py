@@ -57,7 +57,7 @@ def test_openrouter_subtitle_generation():
     """Integration test for subtitle generation using real OpenRouter API.
 
     This test is skipped by default to avoid unnecessary API calls.
-    To run this test, use: pytest tests/integration/test_openrouter_integration.py -v --no-skip
+    To run this test, use: pytest tests/integration/test_openrouter_integration.py -v -s
     """
     content = """title=""
 subtitle=""
