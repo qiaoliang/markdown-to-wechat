@@ -382,23 +382,37 @@ def test_publish_with_invalid_hugo_target_home():
 def test_publish_with_valid_hugo_target_home():
     """Test publishing succeeds with valid HUGO_TARGET_HOME and creates required directories."""
     # Arrange
-    with tempfile.TemporaryDirectory() as hugo_home:
+    with tempfile.TemporaryDirectory() as source_dir, \
+            tempfile.TemporaryDirectory() as hugo_home:
+
+        # Create a test markdown file
+        source_path = Path(source_dir)
+        test_file = source_path / "test.md"
+        test_file.write_text("""---
+title="Test Article"
+date="2024-04-04"
+---
+# Test content
+""")
+
         os.environ["HUGO_TARGET_HOME"] = hugo_home
         processor = HugoProcessor({
-            'source_dir': '/path/to/source',
-            'target_dir': '/path/to/target',
-            'image_dir': '/path/to/images'
+            'source_dir': source_dir,
+            'target_dir': str(Path(hugo_home) / "content" / "blog"),
+            'image_dir': str(Path(hugo_home) / "static" / "img" / "blog")
         })
 
         # Act
-        processor.publish()
+        result = processor.publish()
 
         # Assert
+        assert result["success"] is True
         blog_dir = Path(hugo_home) / "content" / "blog"
         img_dir = Path(hugo_home) / "static" / "img" / "blog"
 
         assert blog_dir.exists(), "Blog directory was not created"
         assert img_dir.exists(), "Image directory was not created"
+        assert (blog_dir / "test.md").exists(), "Markdown file was not copied"
 
 
 def test_publish_copies_markdown_files():

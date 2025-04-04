@@ -263,51 +263,94 @@ class HugoProcessor:
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
 
-    def publish(self) -> None:
+    def publish(self) -> Dict[str, Any]:
         """
-        Publish markdown files to Hugo site.
+        Publish markdown files to Hugo.
 
         This includes:
-        1. Validating HUGO_TARGET_HOME environment variable
-        2. Creating necessary directories
-        3. Copying markdown files and images
-        4. Updating image references
+        1. Checking and creating necessary directories
+        2. Processing markdown files
+        3. Copying and updating image references
+
+        Returns:
+            Dictionary containing:
+                - success: bool indicating if publishing was successful
+                - errors: list of errors encountered
 
         Raises:
             ValueError: If HUGO_TARGET_HOME is not set or points to non-existent directory
         """
-        # Validate HUGO_TARGET_HOME environment variable
-        hugo_home = os.environ.get("HUGO_TARGET_HOME")
-        if not hugo_home:
-            raise ValueError(
-                "HUGO_TARGET_HOME environment variable is not set")
+        result = {
+            "success": True,
+            "errors": []
+        }
 
-        hugo_home_path = Path(hugo_home)
-        if not hugo_home_path.exists():
-            raise ValueError("HUGO_TARGET_HOME directory does not exist")
+        try:
+            # Validate HUGO_TARGET_HOME environment variable
+            hugo_home = os.environ.get("HUGO_TARGET_HOME")
+            if not hugo_home:
+                raise ValueError(
+                    "HUGO_TARGET_HOME environment variable is not set")
 
-        # Create required directories
-        blog_dir = hugo_home_path / "content" / "blog"
-        img_dir = hugo_home_path / "static" / "img" / "blog"
+            hugo_path = Path(hugo_home)
+            if not hugo_path.exists():
+                raise ValueError(
+                    f"HUGO_TARGET_HOME directory does not exist: {hugo_home}")
 
-        blog_dir.mkdir(parents=True, exist_ok=True)
-        img_dir.mkdir(parents=True, exist_ok=True)
+            # Create necessary directories
+            content_dir = hugo_path / "content" / "blog"
+            image_dir = hugo_path / "static" / "img" / "blog"
 
-        self.logger.info(f"Created Hugo directories: {blog_dir} and {img_dir}")
+            content_dir.mkdir(parents=True, exist_ok=True)
+            image_dir.mkdir(parents=True, exist_ok=True)
 
-        # Copy markdown files
-        source_path = Path(self.config['source_dir'])
-        for file_path in source_path.rglob("*.md"):
-            # Get relative path from source directory
-            relative_path = file_path.relative_to(source_path)
-            target_path = blog_dir / relative_path
+            # Process source directory
+            source_path = Path(self.config["source_dir"])
+            if not source_path.exists():
+                raise ValueError(
+                    f"Source directory does not exist: {source_path}")
 
-            # Create parent directories if they don't exist
-            target_path.parent.mkdir(parents=True, exist_ok=True)
+            # Process all markdown files
+            for md_file in source_path.rglob("*.md"):
+                try:
+                    # Determine relative path from source directory
+                    rel_path = md_file.relative_to(source_path)
+                    target_file = content_dir / rel_path
 
-            # Copy the file
-            target_path.write_text(file_path.read_text())
-            self.logger.info(f"Copied {relative_path} to {target_path}")
+                    # Create target directory if it doesn't exist
+                    target_file.parent.mkdir(parents=True, exist_ok=True)
+
+                    # Process and copy the file
+                    content = md_file.read_text()
+
+                    # Copy associated images and update references
+                    image_mapping = self.copy_image_files(md_file)
+                    if image_mapping:
+                        content = self.update_image_references(
+                            content, image_mapping)
+
+                    # Standardize format and remove empty lines
+                    content = self.standardize_format(content)
+                    content = self.remove_empty_lines(content)
+
+                    # Write the processed content
+                    target_file.write_text(content)
+
+                except Exception as e:
+                    result["errors"].append({
+                        "file": str(md_file),
+                        "error": str(e)
+                    })
+                    result["success"] = False
+
+        except ValueError as ve:
+            # Re-raise ValueError exceptions for environment and directory validation
+            raise ve
+        except Exception as e:
+            result["errors"].append(str(e))
+            result["success"] = False
+
+        return result
 
     def copy_image_files(self, md_file: Path) -> Dict[str, str]:
         """
@@ -319,62 +362,78 @@ class HugoProcessor:
         Returns:
             Dictionary mapping original image paths to new Hugo paths
         """
-        # Read markdown content
+        image_mapping = {}
+
+        # Get all image references from the markdown file
         content = md_file.read_text()
-
-        # Extract image references
         image_refs = extract_image_references(content)
+        if not image_refs:
+            return image_mapping
 
-        # Initialize path mapping
-        path_mapping = {}
+        # Get source directory path and markdown file's relative path
+        source_path = Path(self.config['source_dir'])
+        try:
+            md_rel_dir = md_file.parent.relative_to(source_path)
+        except ValueError:
+            # If the markdown file is not under source_path, return empty mapping
+            return image_mapping
 
-        # Get relative directory for nested structure
-        relative_dir = md_file.parent.relative_to(
-            Path(self.config['source_dir']))
+        # Prepare target directory base
+        hugo_home = os.environ.get("HUGO_TARGET_HOME")
+        if not hugo_home:
+            return image_mapping
 
         # Process each image reference
-        for ref in image_refs:
+        for img_ref in image_refs:
             # Skip external images
-            if not ref.path.startswith(('http://', 'https://')):
-                # Resolve image path relative to markdown file
-                img_path = (md_file.parent / ref.path).resolve()
-                if img_path.exists():
-                    # Create target directory if it doesn't exist
-                    target_dir = Path(self.config['image_dir'])
-                    if str(relative_dir) != '.':
-                        # Use first directory level
-                        target_dir = target_dir / \
-                            str(relative_dir).split('/')[0]
-                    target_dir.mkdir(parents=True, exist_ok=True)
+            if img_ref.path.startswith(('http://', 'https://')):
+                continue
 
-                    # Generate unique filename if needed
-                    base_name = img_path.stem
-                    extension = img_path.suffix
-                    target_path = target_dir / f"{base_name}{extension}"
-                    counter = 1
+            # Resolve image path relative to markdown file
+            img_path = md_file.parent / img_ref.path
+            if not img_path.exists():
+                continue
 
-                    while target_path.exists():
-                        # If file exists but has same content, reuse it
-                        if target_path.read_bytes() == img_path.read_bytes():
-                            break
-                        # Otherwise, create a new file with incremented counter
-                        target_path = target_dir / \
-                            f"{base_name}_{counter}{extension}"
-                        counter += 1
+            # Create target directory structure based on markdown file's location
+            target_img_dir = Path(hugo_home) / "static" / "img" / "blog"
+            if str(md_rel_dir) != '.':
+                # Only use the first directory level
+                target_img_dir = target_img_dir / md_rel_dir.parts[0]
+            target_img_dir.mkdir(parents=True, exist_ok=True)
 
-                    # Copy the file
-                    import shutil
-                    shutil.copy2(img_path, target_path)
+            # Prepare target file name
+            target_name = img_path.name
+            target_path = target_img_dir / target_name
 
-                    # Add to path mapping
-                    relative_target = target_path.relative_to(
-                        Path(self.config['image_dir']))
-                    path_mapping[ref.path] = f"/img/blog/{relative_target}"
+            # Handle name conflicts
+            counter = 1
+            while target_path.exists():
+                # If files are identical, reuse the existing file
+                if target_path.read_bytes() == img_path.read_bytes():
+                    break
 
-                    self.logger.info(
-                        f"Copied image {img_path} to {target_path}")
+                # Otherwise, create a new name
+                name_parts = target_name.rsplit('.', 1)
+                if len(name_parts) > 1:
+                    target_name = f"{name_parts[0]}_{counter}.{name_parts[1]}"
+                else:
+                    target_name = f"{name_parts[0]}_{counter}"
+                target_path = target_img_dir / target_name
+                counter += 1
 
-        return path_mapping
+            # Copy the image file
+            target_path.write_bytes(img_path.read_bytes())
+            self.logger.info(f"Copied image {img_path} to {target_path}")
+
+            # Update the mapping with paths relative to Hugo root
+            original_path = img_ref.path
+            if str(md_rel_dir) == '.':
+                new_path = f"/img/blog/{target_name}"
+            else:
+                new_path = f"/img/blog/{md_rel_dir.parts[0]}/{target_name}"
+            image_mapping[original_path] = new_path
+
+        return image_mapping
 
     def update_image_references(self, content: str, path_mapping: Dict[str, str]) -> str:
         """
@@ -411,3 +470,57 @@ class HugoProcessor:
             )
 
         return content
+
+    def process_directory(self, directory: str) -> Dict[str, Any]:
+        """
+        Process all markdown files in a directory for Hugo.
+
+        Args:
+            directory: Path to the directory containing markdown files
+
+        Returns:
+            Dictionary containing:
+                - success: bool indicating if all operations were successful
+                - processed_files: list of processed file paths
+                - errors: list of errors encountered
+        """
+        result = {
+            "success": True,
+            "processed_files": [],
+            "errors": []
+        }
+
+        try:
+            source_path = Path(directory)
+            if not source_path.exists():
+                raise ValueError(f"Directory does not exist: {directory}")
+
+            # Process all markdown files in the directory and subdirectories
+            for md_file in source_path.rglob("*.md"):
+                try:
+                    # Check format first
+                    violations = self.check_format(md_file)
+                    if violations:
+                        result["errors"].append({
+                            "file": str(md_file),
+                            "violations": violations
+                        })
+                        continue
+
+                    # Process the file
+                    self.process_file(str(md_file))
+                    result["processed_files"].append(str(md_file))
+                except Exception as e:
+                    result["errors"].append({
+                        "file": str(md_file),
+                        "error": str(e)
+                    })
+                    result["success"] = False
+
+        except Exception as e:
+            result["errors"].append({
+                "error": str(e)
+            })
+            result["success"] = False
+
+        return result
