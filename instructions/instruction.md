@@ -25,7 +25,11 @@ Develop a Markdown toolset using Python 3.12. The tool allows users to perform o
   - If there are format issues, notify the user with detailed information.
 - **`-a post`**:
   - First, perform the format suitability check.
-  - If all checks pass, publish all articles along with their referenced images. "Publish" means moving all Markdown files to a specific location and all related images to another specific location. These locations are obtained from environment variables.
+  - If all checks pass, publish all articles along with their referenced images:
+    - Get the target home directory from environment variable `HUGO_TARGET_HOME`
+    - Copy Markdown files to `{HUGO_TARGET_HOME}/content/blog`
+    - Copy related images to `{HUGO_TARGET_HOME}/static/img/blog`
+    - Notify the user about the publishing results
 
 ### Front - Formatting for Hugo
 - **Format Consistency**:
@@ -140,3 +144,31 @@ markdown-to-wechat
     ├── wx_htmler.py
     └── wx_publisher.py
 ```
+
+## Hugo Operations
+
+### Empty Line Removal
+The empty line removal functionality ensures markdown files maintain a clean and consistent structure while preserving semantic meaning. The system follows these rules:
+
+1. **Basic Rules**:
+   - Remove multiple consecutive empty lines, keeping only one
+   - Remove unnecessary empty lines at the start and end of the file
+   - Preserve single empty lines between paragraphs
+   - Preserve single empty lines before and after headers
+
+2. **Special Cases**:
+   - **Code Blocks**: Preserve all empty lines within code blocks
+   - **Lists**: 
+     - Keep single empty line between list items
+     - Allow empty line between different list groups
+   - **Front Matter**: 
+     - Remove empty lines within front matter
+     - Keep single empty line after front matter
+
+3. **Integration**:
+   - Empty line removal is integrated into the `HugoProcessor`
+   - Runs after format standardization
+   - Preserves front matter formatting
+
+### Format Checking and Standardization
+// ... existing code ...
