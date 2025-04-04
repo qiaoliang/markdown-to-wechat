@@ -300,3 +300,109 @@ keywords=[]
     # Verify we get exactly 3 tags
     assert len(tags) == 3
     assert tags == ["python", "async", "io"]  # Should keep first 3 tags
+
+
+def test_suggest_category(mock_openai):
+    """Test category suggestion with mocked OpenAI client."""
+    # Setup mock response
+    mock_response = MagicMock()
+    mock_response.choices = [
+        MagicMock(message=MagicMock(
+            content="Software Engineering"))
+    ]
+    mock_openai.chat.completions.create.return_value = mock_response
+
+    # Test content about software engineering
+    content = """title=""
+subtitle=""
+tags=[]
+categories=[]
+keywords=[]
+---
+# Best Practices in Software Design
+This article discusses SOLID principles, design patterns,
+and other best practices in software engineering."""
+
+    service = OpenRouterService()
+    category = service.suggest_category(content)
+
+    # Verify the category
+    assert isinstance(category, str)
+    assert category in ["Personal Opinion", "Practical Summary", "Methodology",
+                        "AI Programming", "Software Engineering", "Engineering Efficiency",
+                        "Artificial Intelligence"]
+    assert category == "Software Engineering"  # Should match the mock response
+
+    # Verify OpenAI client was called correctly
+    mock_openai.chat.completions.create.assert_called_once()
+    call_args = mock_openai.chat.completions.create.call_args[1]
+    assert call_args['model'] == "deepseek/deepseek-v3-base:free"
+    assert len(call_args['messages']) == 2
+    assert call_args['messages'][0]['role'] == "system"
+    assert "category suggester" in call_args['messages'][0]['content'].lower()
+
+
+def test_suggest_category_new_category(mock_openai):
+    """Test category suggestion when content doesn't match predefined categories."""
+    # Setup mock response for a new category
+    mock_response = MagicMock()
+    mock_response.choices = [
+        MagicMock(message=MagicMock(
+            content="Data Science"))
+    ]
+    mock_openai.chat.completions.create.return_value = mock_response
+
+    # Test content about data science
+    content = """title=""
+subtitle=""
+tags=[]
+categories=[]
+keywords=[]
+---
+# Introduction to Data Science
+This article covers the basics of data science,
+including statistics, data analysis, and visualization."""
+
+    service = OpenRouterService()
+    category = service.suggest_category(content)
+
+    # Verify the category
+    assert isinstance(category, str)
+    assert category == "Data Science"  # Should accept the new category
+    assert len(category) > 0
+    assert all(c.isalnum() or c.isspace()
+               for c in category)  # Only allow letters, numbers, and spaces
+
+
+def test_suggest_category_empty_content(mock_openai):
+    """Test category suggestion with empty content."""
+    service = OpenRouterService()
+    category = service.suggest_category("")
+
+    # Should default to a safe category for empty content
+    assert category == "Personal Opinion"
+
+
+def test_suggest_category_max_categories(mock_openai):
+    """Test category suggestion respects maximum category limit."""
+    # Setup mock response
+    mock_response = MagicMock()
+    mock_response.choices = [
+        MagicMock(message=MagicMock(
+            content="New Category"))
+    ]
+    mock_openai.chat.completions.create.return_value = mock_response
+
+    service = OpenRouterService()
+
+    # Simulate having 10 existing categories
+    existing_categories = [
+        "Personal Opinion", "Practical Summary", "Methodology",
+        "AI Programming", "Software Engineering", "Engineering Efficiency",
+        "Artificial Intelligence", "Data Science", "Web Development",
+        "Mobile Development"
+    ]
+
+    # When we have max categories, should return one of existing categories
+    category = service.suggest_category("Some content", existing_categories)
+    assert category in existing_categories
