@@ -247,26 +247,44 @@ class OpenRouterService:
         if len(tags) > 3:
             tags = tags[:3]
 
-        # If we don't have enough tags, try to extract from content
+        # If we don't have enough tags, extract from content
         if len(tags) < 3:
-            # First, try to use the first header (title) as a tag
-            if clean_lines and clean_lines[0] not in tags:
-                # Take first word of title or hyphenate multiple words
-                title_words = clean_lines[0].split()
-                if title_words:
-                    title_tag = "-".join(title_words[:3])
-                    # Clean the title tag
-                    title_tag = "".join(
-                        c for c in title_tag if c.isalnum() or c == "-")
-                    while "--" in title_tag:
-                        title_tag = title_tag.replace("--", "-")
-                    title_tag = title_tag.strip("-")
-                    if title_tag and title_tag not in tags:
-                        tags.append(title_tag)
+            # First, try to use the first header as a tag
+            if clean_lines:
+                header_tag = "-".join(word.strip()
+                                      for word in clean_lines[0].split())
+                if header_tag and header_tag not in tags:
+                    tags.append(header_tag)
 
-        # If we still don't have enough tags, add generic ones
-        while len(tags) < 3:
-            tags.append(f"topic-{len(tags)+1}")
+            # Then, look for key terms in the content
+            content_text = " ".join(clean_lines).lower()
+            key_terms = ["programming", "development", "software", "python",
+                         "javascript", "web", "api", "data", "cloud", "security"]
+
+            # First, try to find exact matches
+            for term in key_terms:
+                if len(tags) >= 3:
+                    break
+                if term in content_text and term not in tags:
+                    tags.append(term)
+
+            # If we still need more tags, look for partial matches
+            if len(tags) < 3:
+                for line in clean_lines:
+                    if len(tags) >= 3:
+                        break
+                    words = line.lower().split()
+                    for term in key_terms:
+                        if len(tags) >= 3:
+                            break
+                        if any(term in word for word in words) and term not in tags:
+                            tags.append(term)
+
+            # If we still need more tags, add generic ones
+            while len(tags) < 3:
+                generic_tag = f"topic-{len(tags) + 1}"
+                if generic_tag not in tags:
+                    tags.append(generic_tag)
 
         return tags
 
