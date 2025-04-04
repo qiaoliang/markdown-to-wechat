@@ -385,3 +385,87 @@ class OpenRouterService:
             return "Personal Opinion"
 
         return category
+
+    def generate_seo_keywords(self, content: str) -> List[str]:
+        """Generate SEO-friendly keywords from the article content.
+
+        Args:
+            content: The full article content including front matter
+
+        Returns:
+            A list of up to 20 SEO-friendly keywords
+        """
+        # Handle empty content
+        if not content:
+            return []
+
+        # Extract content without front matter
+        content_without_front_matter = content.split(
+            "---", 1)[1] if "---" in content else content
+
+        # Clean up the content
+        content_lines = content_without_front_matter.strip().split("\n")
+        clean_lines = []
+        for line in content_lines:
+            line = line.strip()
+            if not line:
+                continue
+            # Remove markdown header markers but preserve the text
+            if line.startswith('#'):
+                line = line.lstrip('#').strip()
+            clean_lines.append(line)
+
+        # Take first few paragraphs for context
+        clean_content = " ".join(clean_lines[:10])
+
+        response = self.client.chat.completions.create(
+            model="deepseek/deepseek-v3-base:free",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Generate SEO keywords for the given article content. Return up to 20 relevant keywords or key phrases. Each keyword/phrase should be 1-3 words long. Return ONLY the keywords in a comma-separated format. Focus on terms that would be valuable for search engine optimization."
+                },
+                {
+                    "role": "user",
+                    "content": clean_content
+                }
+            ],
+            temperature=0.3,  # Lower temperature for more focused output
+            max_tokens=100,   # Keywords can be longer than titles/tags
+            top_p=0.8        # More focused token selection
+        )
+
+        keywords_text = response.choices[0].message.content.strip()
+
+        # Split the comma-separated keywords and clean them
+        raw_keywords = [kw.strip() for kw in keywords_text.split(',')]
+
+        # Clean and format each keyword
+        keywords = []
+        for keyword in raw_keywords:
+            # Remove any quotes or special characters
+            clean_keyword = (keyword
+                             .replace('"', '')
+                             .replace("'", "")
+                             .replace("[", "")
+                             .replace("]", "")
+                             .strip())
+
+            # Skip empty keywords
+            if not clean_keyword:
+                continue
+
+            # Ensure keyword is not too long (max 3 words)
+            words = clean_keyword.split()
+            if len(words) > 3:
+                clean_keyword = " ".join(words[:3])
+
+            # Add keyword if it's unique
+            if clean_keyword and clean_keyword not in keywords:
+                keywords.append(clean_keyword)
+
+            # Stop if we have 20 keywords
+            if len(keywords) >= 20:
+                break
+
+        return keywords
