@@ -269,3 +269,119 @@ class OpenRouterService:
             tags.append(f"topic-{len(tags)+1}")
 
         return tags
+
+    def suggest_category(self, content: str, existing_categories: List[str] = None) -> str:
+        """Generate a category suggestion for the article content.
+
+        Args:
+            content: The full article content including front matter
+            existing_categories: Optional list of existing categories to check against max limit
+
+        Returns:
+            A suggested category that best represents the article's topic
+        """
+        # Handle empty content
+        if not content:
+            return "Personal Opinion"
+
+        # Define predefined categories
+        PREDEFINED_CATEGORIES = [
+            "Personal Opinion", "Practical Summary", "Methodology",
+            "AI Programming", "Software Engineering", "Engineering Efficiency",
+            "Artificial Intelligence"
+        ]
+
+        # If we have max categories (10), only use existing ones
+        if existing_categories and len(existing_categories) >= 10:
+            # Extract content without front matter
+            content_without_front_matter = content.split(
+                "---", 1)[1] if "---" in content else content
+
+            # Clean up the content
+            content_lines = content_without_front_matter.strip().split("\n")
+            clean_lines = []
+            for line in content_lines:
+                line = line.strip()
+                if not line:
+                    continue
+                # Remove markdown header markers but preserve the text
+                if line.startswith('#'):
+                    line = line.lstrip('#').strip()
+                clean_lines.append(line)
+
+            # Take first paragraph for context
+            clean_content = " ".join(clean_lines[:5])
+
+            response = self.client.chat.completions.create(
+                model="deepseek/deepseek-v3-base:free",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": f"You are a category suggester. Given the article content, suggest the most appropriate category from this list: {', '.join(existing_categories)}. Return ONLY the category name, no other text."
+                    },
+                    {
+                        "role": "user",
+                        "content": clean_content
+                    }
+                ],
+                temperature=0.3,  # Lower temperature for more focused output
+                max_tokens=10,    # Category names are short
+                top_p=0.8        # More focused token selection
+            )
+
+            suggested_category = response.choices[0].message.content.strip()
+            # Ensure we return a valid existing category
+            return suggested_category if suggested_category in existing_categories else existing_categories[0]
+
+        # For normal case (less than 10 categories), we can suggest new ones
+        # Extract content without front matter
+        content_without_front_matter = content.split(
+            "---", 1)[1] if "---" in content else content
+
+        # Clean up the content
+        content_lines = content_without_front_matter.strip().split("\n")
+        clean_lines = []
+        for line in content_lines:
+            line = line.strip()
+            if not line:
+                continue
+            # Remove markdown header markers but preserve the text
+            if line.startswith('#'):
+                line = line.lstrip('#').strip()
+            clean_lines.append(line)
+
+        # Take first paragraph for context
+        clean_content = " ".join(clean_lines[:5])
+
+        response = self.client.chat.completions.create(
+            model="deepseek/deepseek-v3-base:free",
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"You are a category suggester. Given the article content, suggest the most appropriate category. Prefer these predefined categories if they fit: {', '.join(PREDEFINED_CATEGORIES)}. If none fit well, suggest a new concise category (1-3 words). Return ONLY the category name, no other text."
+                },
+                {
+                    "role": "user",
+                    "content": clean_content
+                }
+            ],
+            temperature=0.3,  # Lower temperature for more focused output
+            max_tokens=10,    # Category names are short
+            top_p=0.8        # More focused token selection
+        )
+
+        category = response.choices[0].message.content.strip()
+
+        # Clean up the category
+        category = (category
+                    .replace('"', '')
+                    .replace("'", "")
+                    .replace("[", "")
+                    .replace("]", "")
+                    .strip())
+
+        # Ensure we have a valid category
+        if not category:
+            return "Personal Opinion"
+
+        return category
