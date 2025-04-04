@@ -271,8 +271,8 @@ A basic guide to Python programming."""
     # Verify we still get exactly 3 tags
     assert len(tags) == 3
     assert tags[0] == "python"  # First tag from API
-    assert "Understanding Python" in tags[1]  # Second tag from content
-    assert tags[2].startswith("topic-")  # Third tag is generic
+    assert "Understanding-Python" in tags[1]  # Second tag from content
+    assert "programming" in tags[2]  # Third tag from content
 
 
 def test_generate_tags_excess_response(mock_openai):
