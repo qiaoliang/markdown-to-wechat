@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Dict, Any, List
 from dataclasses import dataclass
+from .empty_line_processor import EmptyLineProcessor
 
 
 @dataclass
@@ -39,6 +40,7 @@ class HugoProcessor:
         """
         self.config = self._validate_config(config)
         self.logger = logging.getLogger(__name__)
+        self.empty_line_processor = EmptyLineProcessor()
 
     def _validate_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -128,67 +130,55 @@ class HugoProcessor:
 
         return violations
 
-    def standardize_format(self, markdown_file: Path) -> str:
+    def standardize_format(self, content: str | Path) -> str:
         """
-        Standardize the format of a markdown file to use key="value" format.
+        Standardize the format of markdown content to use key="value" format.
 
         Args:
-            markdown_file: Path to the markdown file to standardize
+            content: Either a Path to the markdown file or the content string
 
         Returns:
             Standardized content as a string
 
         Raises:
-            ValueError: If the file is missing front matter
+            ValueError: If the content is missing front matter
         """
-        content = markdown_file.read_text()
-        if not content.endswith('\n'):
-            content += '\n'
-        lines = content.splitlines()
+        if isinstance(content, Path):
+            content = content.read_text()
 
-        # Check for front matter
-        if not content.startswith(self.FRONT_MATTER_START):
-            raise ValueError("Missing front matter")
+        # Extract front matter
+        front_matter_match = re.match(
+            r'^---\n(.*?)\n---\n', content, re.DOTALL)
+        if not front_matter_match:
+            raise ValueError("Missing front matter in markdown file")
 
-        # Find front matter boundaries
-        front_matter_end = -1
-        for i, line in enumerate(lines[1:], 1):
-            if line == self.FRONT_MATTER_START:
-                front_matter_end = i
-                break
+        front_matter = front_matter_match.group(1)
+        rest_of_content = content[front_matter_match.end():]
 
-        if front_matter_end == -1:
-            raise ValueError("Incomplete front matter: missing closing '---'")
-
-        # Process front matter
-        standardized_lines = [self.FRONT_MATTER_START]
-        for line in lines[1:front_matter_end]:
+        # Process front matter lines
+        processed_lines = []
+        for line in front_matter.splitlines():
             line = line.strip()
             if not line:
                 continue
 
-            # Skip if already in key="value" format
-            if self.KEY_VALUE_PATTERN.match(line):
-                standardized_lines.append(line)
+            # Skip lines that are already in key="value" format
+            if re.match(r'^[^:=]+="[^"]*"$', line):
+                processed_lines.append(line)
                 continue
 
-            # Convert key: value format
-            if match := self.KEY_COLON_PATTERN.match(line):
+            # Convert key: value or key=value to key="value"
+            match = re.match(r'^([^:=]+)[:=]\s*(.*)$', line)
+            if match:
                 key, value = match.groups()
-                standardized_value = self._standardize_value(value.strip())
-                standardized_lines.append(f'{key}={standardized_value}')
-                continue
+                key = key.strip()
+                value = value.strip()
+                value = self._standardize_value(value)
+                processed_lines.append(f'{key}={value}')
 
-            # Invalid format, keep as is but log warning
-            self.logger.warning(f"Invalid front matter line format: {line}")
-            standardized_lines.append(line)
-
-        # Add closing front matter marker and remaining content
-        standardized_lines.append(self.FRONT_MATTER_START)
-        if front_matter_end + 1 < len(lines):
-            standardized_lines.extend(lines[front_matter_end + 1:])
-
-        return '\n'.join(standardized_lines) + '\n'
+        # Reconstruct the content
+        standardized_front_matter = "\n".join(processed_lines)
+        return f"---\n{standardized_front_matter}\n---\n{rest_of_content}"
 
     def _standardize_value(self, value: str) -> str:
         """
@@ -234,3 +224,39 @@ class HugoProcessor:
         # For simple values, escape quotes and wrap in double quotes
         value = value.replace('"', '\\"')
         return f'"{value}"'
+
+    def remove_empty_lines(self, content: str) -> str:
+        """
+        Remove unnecessary empty lines while preserving semantic structure.
+
+        Args:
+            content: The markdown content to process.
+
+        Returns:
+            The processed content with unnecessary empty lines removed.
+        """
+        return self.empty_line_processor.process_content(content)
+
+    def process_file(self, file_path: str) -> None:
+        """
+        Process a markdown file for Hugo.
+
+        This includes:
+        1. Format standardization
+        2. Empty line removal
+
+        Args:
+            file_path: Path to the markdown file to process.
+        """
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # First standardize the format
+        content = self.standardize_format(content)
+
+        # Then remove unnecessary empty lines
+        content = self.remove_empty_lines(content)
+
+        # Write back to file
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(content)

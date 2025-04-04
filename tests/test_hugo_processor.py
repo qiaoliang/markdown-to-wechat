@@ -1,3 +1,5 @@
+import os
+import tempfile
 import pytest
 from pathlib import Path
 from typing import Dict, Any
@@ -134,3 +136,209 @@ No front matter here
 
     # Cleanup
     md_file.unlink()
+
+
+def test_standardize_format_with_mixed_formats():
+    # Arrange
+    content = """---
+title="Test Article"
+description: A test article
+date="2024-04-04"
+tags: ["tag1", "tag2"]
+categories: [cat1, cat2]
+---
+# Content here
+"""
+    md_file = create_temp_markdown_file(content)
+    processor = HugoProcessor(
+        {'source_dir': str(md_file.parent), 'target_dir': '/tmp', 'image_dir': '/tmp'})
+
+    # Act
+    standardized_content = processor.standardize_format(md_file)
+
+    # Assert
+    expected_content = """---
+title="Test Article"
+description="A test article"
+date="2024-04-04"
+tags=["tag1", "tag2"]
+categories=["cat1", "cat2"]
+---
+# Content here
+"""
+    assert standardized_content == expected_content
+
+    # Cleanup
+    md_file.unlink()
+
+
+def test_standardize_format_with_already_standard_format():
+    # Arrange
+    content = """---
+title="Test Article"
+description="A test article"
+date="2024-04-04"
+---
+# Content here
+"""
+    md_file = create_temp_markdown_file(content)
+    processor = HugoProcessor(
+        {'source_dir': str(md_file.parent), 'target_dir': '/tmp', 'image_dir': '/tmp'})
+
+    # Act
+    standardized_content = processor.standardize_format(md_file)
+
+    # Assert
+    assert standardized_content == content
+
+    # Cleanup
+    md_file.unlink()
+
+
+def test_standardize_format_with_missing_front_matter():
+    # Arrange
+    content = """# Just content
+No front matter here
+"""
+    md_file = create_temp_markdown_file(content)
+    processor = HugoProcessor(
+        {'source_dir': str(md_file.parent), 'target_dir': '/tmp', 'image_dir': '/tmp'})
+
+    # Act & Assert
+    with pytest.raises(ValueError) as exc_info:
+        processor.standardize_format(md_file)
+    assert "Missing front matter" in str(exc_info.value)
+
+    # Cleanup
+    md_file.unlink()
+
+
+def test_standardize_format_with_complex_values():
+    # Arrange
+    content = """---
+title: "Article with: colon"
+description: Article about \"quotes\" and stuff
+date: 2024-04-04 15:30:00
+list: [1, 2, 3]
+nested: {key: value, other: stuff}
+---
+# Content here
+"""
+    md_file = create_temp_markdown_file(content)
+    processor = HugoProcessor(
+        {'source_dir': str(md_file.parent), 'target_dir': '/tmp', 'image_dir': '/tmp'})
+
+    # Act
+    standardized_content = processor.standardize_format(md_file)
+
+    # Assert
+    expected_content = """---
+title="Article with: colon"
+description="Article about \\"quotes\\" and stuff"
+date="2024-04-04 15:30:00"
+list=[1, 2, 3]
+nested={"key": "value", "other": "stuff"}
+---
+# Content here
+"""
+    assert standardized_content == expected_content
+
+    # Cleanup
+    md_file.unlink()
+
+
+def test_remove_empty_lines():
+    """Test empty line removal functionality in HugoProcessor."""
+    config = {
+        "source_dir": "test_source",
+        "target_dir": "test_target",
+        "image_dir": "test_images"
+    }
+    processor = HugoProcessor(config)
+    content = (
+        "---\n"
+        "title=\"Test\"\n"
+        "date=\"2024-04-04\"\n"
+        "---\n"
+        "\n"
+        "\n"
+        "First paragraph\n"
+        "\n"
+        "\n"
+        "```python\n"
+        "def test():\n"
+        "\n"
+        "    return None\n"
+        "```\n"
+        "\n"
+        "\n"
+        "- List item 1\n"
+        "- List item 2\n"
+        "\n"
+        "- New group item\n"
+        "\n"
+        "\n"
+        "Last paragraph"
+    )
+    expected = (
+        "---\n"
+        "title=\"Test\"\n"
+        "date=\"2024-04-04\"\n"
+        "---\n"
+        "\n"
+        "First paragraph\n"
+        "\n"
+        "```python\n"
+        "def test():\n"
+        "\n"
+        "    return None\n"
+        "```\n"
+        "\n"
+        "- List item 1\n"
+        "- List item 2\n"
+        "\n"
+        "- New group item\n"
+        "\n"
+        "Last paragraph"
+    )
+    result = processor.remove_empty_lines(content)
+    assert result == expected
+
+
+def test_process_file_with_empty_lines():
+    """Test that process_file handles empty lines correctly."""
+    config = {
+        "source_dir": "test_source",
+        "target_dir": "test_target",
+        "image_dir": "test_images"
+    }
+    processor = HugoProcessor(config)
+    content = (
+        "---\n"
+        "title: Test\n"
+        "date: 2024-04-04\n"
+        "---\n"
+        "\n"
+        "\n"
+        "Content with empty lines\n"
+        "\n"
+        "\n"
+        "Should be standardized"
+    )
+    expected = (
+        "---\n"
+        "title=\"Test\"\n"
+        "date=\"2024-04-04\"\n"
+        "---\n"
+        "\n"
+        "Content with empty lines\n"
+        "\n"
+        "Should be standardized"
+    )
+    with tempfile.NamedTemporaryFile(mode='w+', suffix='.md') as temp:
+        temp.write(content)
+        temp.flush()
+        processor.process_file(temp.name)
+        temp.seek(0)
+        result = temp.read()
+        assert result == expected
