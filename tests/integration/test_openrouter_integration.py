@@ -150,3 +150,57 @@ This article explains the core concepts and best practices for using async/await
 
     # Print tags for manual inspection
     print(f"\nGenerated tags: {tags}")
+
+
+@pytest.mark.skip(reason="Integration test that calls OpenRouter API - run manually")
+def test_openrouter_category_suggestion():
+    """Integration test for category suggestion using real OpenRouter API."""
+    content = """title=""
+subtitle=""
+tags=[]
+categories=[]
+keywords=[]
+---
+# Understanding Python's Async IO
+Python's asynchronous IO system is a powerful way to handle concurrent operations.
+This article explains the core concepts and best practices for using async/await in Python.
+
+## Key Concepts
+- Coroutines
+- Event Loop
+- Async/Await Syntax
+
+## Benefits
+1. Better performance for IO-bound operations
+2. Clean and readable code
+3. Efficient resource utilization"""
+
+    service = OpenRouterService()
+
+    # Test with no existing categories (should prefer predefined ones)
+    category = service.suggest_category(content)
+
+    # Verify the category
+    assert isinstance(category, str)
+    assert len(category) > 0
+    # Category should be one of predefined ones or a reasonable new one
+    predefined = ["Personal Opinion", "Practical Summary", "Methodology",
+                  "AI Programming", "Software Engineering", "Engineering Efficiency",
+                  "Artificial Intelligence"]
+    if category not in predefined:
+        # If not predefined, should be reasonable length and format
+        assert len(category.split()
+                   ) <= 3, f"Category '{category}' should be at most 3 words"
+        assert all(c.isalnum() or c.isspace() for c in category), \
+            f"Category '{category}' should only contain letters, numbers, and spaces"
+
+    # Test with maximum categories (should only use existing ones)
+    existing_categories = predefined + \
+        ["Web Development", "Mobile Development", "Data Science"]
+    category_max = service.suggest_category(content, existing_categories)
+    assert category_max in existing_categories, \
+        f"Category '{category_max}' should be one of existing categories when at max limit"
+
+    # Print categories for manual inspection
+    print(f"\nGenerated category (no existing): {category}")
+    print(f"Generated category (max limit): {category_max}")
