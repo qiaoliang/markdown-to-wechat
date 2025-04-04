@@ -59,6 +59,21 @@ The Markdown toolset is designed with a modular architecture, separating concern
     - Generates concise descriptions under 50 characters
     - Ensures proper sentence structure and punctuation
     - Maintains content relevance
+  - Tag generation (✅)
+    - Generates exactly three tags
+    - Smart fallback mechanism
+    - Content-based tag extraction
+    - Format validation
+  - Category suggestion (✅)
+    - Predefined categories support
+    - New category suggestion
+    - Maximum category limit (10)
+    - Smart fallback mechanism
+  - SEO keyword generation (✅)
+    - Generates up to 20 keywords
+    - Smart keyword extraction
+    - Length control (1-3 words per keyword)
+    - Relevance validation
   - Content preprocessing and cleaning
     - Front matter extraction
     - Markdown header cleaning
@@ -74,10 +89,6 @@ The Markdown toolset is designed with a modular architecture, separating concern
     - Unit tests with mocked responses
     - Integration tests (skippable)
     - Edge case handling
-- Pending capabilities:
-  - Tag generation
-  - Category suggestion
-  - SEO keyword generation
 
 ## Testing Infrastructure
 - Comprehensive test suite using pytest
@@ -110,12 +121,12 @@ wx/
 5. ✅ WeChat publishing framework
 6. ✅ Cache management
 7. ✅ WeChat API integration
-8. 🚧 OpenRouter integration
+8. ✅ OpenRouter integration
    - ✅ Title generation
    - ✅ Subtitle/description generation
-   - 🚧 Tag generation (Next)
-   - 📋 Category suggestion
-   - 📋 SEO keyword generation
+   - ✅ Tag generation
+   - ✅ Category suggestion
+   - ✅ SEO keyword generation
 
 ## Pending Implementation
 1. Hugo-specific operations
