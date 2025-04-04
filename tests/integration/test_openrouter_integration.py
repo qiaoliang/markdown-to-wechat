@@ -204,3 +204,54 @@ This article explains the core concepts and best practices for using async/await
     # Print categories for manual inspection
     print(f"\nGenerated category (no existing): {category}")
     print(f"Generated category (max limit): {category_max}")
+
+
+@pytest.mark.skip(reason="Integration test requiring OpenRouter API access")
+def test_openrouter_seo_keywords():
+    """Integration test for SEO keyword generation using OpenRouter API."""
+    service = OpenRouterService()
+    content = """title=""
+subtitle=""
+tags=[]
+categories=[]
+keywords=[]
+---
+# Understanding Python's Async IO
+Python's asynchronous IO system is a powerful way to handle concurrent operations.
+This article explains the core concepts and best practices for using async/await in Python.
+
+## Key Concepts
+- Coroutines
+- Event Loop
+- Async/Await Syntax
+- Task Management
+- Error Handling
+
+## Benefits
+- Improved performance for IO-bound operations
+- Better resource utilization
+- Clean and maintainable code
+- Scalable application design"""
+
+    keywords = service.generate_seo_keywords(content)
+
+    # Verify we get keywords
+    assert isinstance(keywords, list)
+    assert len(keywords) > 0
+    assert len(keywords) <= 20  # Should not exceed 20 keywords
+
+    # Verify keyword format
+    for keyword in keywords:
+        assert isinstance(keyword, str)
+        assert len(keyword.split()) <= 3  # Each keyword should be max 3 words
+        assert keyword.strip() == keyword  # No leading/trailing whitespace
+
+    # Verify relevance - at least some keywords should contain relevant terms
+    relevant_terms = ['python', 'async', 'io',
+                      'concurrent', 'coroutine', 'performance']
+    found_relevant = False
+    for keyword in keywords:
+        if any(term.lower() in keyword.lower() for term in relevant_terms):
+            found_relevant = True
+            break
+    assert found_relevant, f"Keywords {keywords} should contain at least one relevant term from {relevant_terms}"
