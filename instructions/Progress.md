@@ -24,6 +24,18 @@
   - Comprehensive test coverage (95%)
   - Error handling for invalid formats
 
+### OpenRouter Integration - Phase 1 ✅
+- Implemented `OpenRouterService` class for AI-powered content enhancement
+- Features:
+  - Title generation from article content
+  - Integration with OpenRouter API using OpenAI SDK format
+  - Proper error handling and retry mechanisms
+  - Comprehensive test coverage
+  - Integration tests (marked as skippable)
+  - Content cleaning and preprocessing
+  - Token and length control
+  - Relevant keyword verification
+
 ### Core Components Status
 1. Command Line Interface (`cli.py`) ✅
    - Basic command parsing implemented
@@ -61,26 +73,25 @@
    - Authentication handling
 
 ## In Progress 🚧
-1. Error Handler Integration
+1. OpenRouter Integration - Phase 2
+   - Implementing subtitle/description generation
+   - Test suite for subtitle generation
+   - Documentation updates
+
+2. Error Handler Integration
    - Integrate error handling with existing modules
    - Implement specific recovery strategies for each module
    - Add more comprehensive error documentation
 
-2. Hugo Operations Phase 1: Front Matter
-   - Implementing Front Matter Parser and Validator
-   - Test suite for Front Matter component
-   - Documentation updates
-
 ## Pending Tasks 📋
-1. Hugo Operations (Remaining Phases)
-   - Phase 2: OpenRouter Integration
-   - Phase 3: HugoProcessor Implementation
-
-2. OpenRouter Integration
-   - Title generation
-   - Subtitle/description generation
-   - Tag and category suggestion
+1. OpenRouter Integration (Remaining Features)
+   - Tag generation
+   - Category suggestion
    - SEO keyword generation
+
+2. Hugo Operations (Remaining Phases)
+   - Phase 2: HugoProcessor Implementation
+   - Phase 3: Publishing Implementation
 
 3. Advanced Features
    - Enhanced image management
@@ -88,20 +99,22 @@
    - Additional recovery strategies
 
 ## Next Steps
-1. Integrate error handling system with existing modules
-2. Implement Hugo-specific operations
-3. Set up OpenRouter integration for content enhancement
-4. Add more specific recovery strategies for different error types
+1. Complete subtitle/description generation feature
+2. Add comprehensive tests for subtitle generation
+3. Update documentation with new OpenRouter features
+4. Proceed with remaining OpenRouter integration tasks
 
 ## Testing Status
 - Unit Tests: ✅ All core components
 - Integration Tests: ✅ Basic workflows
 - Error Handler Tests: ✅ 87% coverage
-- Pending: Hugo operations and OpenRouter integration tests
+- OpenRouter Tests: ✅ Title generation (with skip option)
+- Pending: Subtitle generation tests
 
 ## Documentation Status
 - System Architecture: ✅ Complete
 - API Documentation: ✅ Complete
 - Error Handling Guide: ✅ Complete
+- OpenRouter Integration: 🚧 In Progress
 - User Guide: 🚧 In Progress
 - Integration Guide: 📋 Pending

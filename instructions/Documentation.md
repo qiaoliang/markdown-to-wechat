@@ -48,6 +48,37 @@ The Markdown toolset is designed with a modular architecture, separating concern
 - Implements WeChat API integration using WeRobot framework
 - Handles authentication and communication with WeChat platform
 
+### 8. OpenRouter Service (`openrouter_service.py`)
+- Implements AI-powered content enhancement using OpenRouter API
+- Features:
+  - Title generation from article content (✅)
+    - Generates titles under 100 characters
+    - Ensures relevance to content
+    - Handles content preprocessing
+  - Subtitle/description generation (✅)
+    - Generates concise descriptions under 50 characters
+    - Ensures proper sentence structure and punctuation
+    - Maintains content relevance
+  - Content preprocessing and cleaning
+    - Front matter extraction
+    - Markdown header cleaning
+    - Content truncation for API efficiency
+  - Token and length control
+    - Configurable temperature and top_p
+    - Optimized token limits
+    - Smart truncation with ellipsis
+  - Integration with OpenAI SDK format
+    - Custom system prompts
+    - Error handling and validation
+  - Comprehensive testing
+    - Unit tests with mocked responses
+    - Integration tests (skippable)
+    - Edge case handling
+- Pending capabilities:
+  - Tag generation
+  - Category suggestion
+  - SEO keyword generation
+
 ## Testing Infrastructure
 - Comprehensive test suite using pytest
 - Test coverage for all major components:
@@ -68,6 +99,7 @@ wx/
 ├── wx_publisher.py   # WeChat publishing
 ├── wx_cache.py      # Cache management
 └── wx_client.py     # WeChat API client
+└── openrouter_service.py # AI content enhancement
 ```
 
 ## Current Implementation Status
@@ -78,6 +110,12 @@ wx/
 5. ✅ WeChat publishing framework
 6. ✅ Cache management
 7. ✅ WeChat API integration
+8. 🚧 OpenRouter integration
+   - ✅ Title generation
+   - ✅ Subtitle/description generation
+   - 🚧 Tag generation (Next)
+   - 📋 Category suggestion
+   - 📋 SEO keyword generation
 
 ## Pending Implementation
 1. Hugo-specific operations
