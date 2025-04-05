@@ -137,6 +137,23 @@
   - File name conflict tests
   - Error recovery tests
 
+### Hugo Operations - Document Validation
+- Implementation status:
+  - 🚧 Pre-publishing validation
+    - Image reference validation
+    - Front matter completeness check
+    - Skip invalid documents
+    - Detailed validation reporting
+- Current focus:
+  - Implementing document validation system
+  - Enhancing validation reporting
+  - Integration with publishing workflow
+- Test coverage goals:
+  - Document validation tests
+  - Invalid document handling
+  - Validation reporting
+  - Integration tests with publishing system
+
 ## Testing Status
 - Overall Status:
   - Total Tests: 137

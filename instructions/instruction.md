@@ -28,17 +28,27 @@ Develop a Markdown toolset using Python 3.12. The tool allows users to perform o
   - If all checks pass, publish all articles along with their referenced images:
     - Get the target home directory from environment variable `HUGO_TARGET_HOME`
     - Process in the following order:
-      1. Copy referenced images to `{HUGO_TARGET_HOME}/static/img/blog`
-         - If target image exists, overwrite it
-         - No need to generate unique names for conflicting files
-      2. Copy Markdown files to `{HUGO_TARGET_HOME}/content/blog`
-         - If target file exists, overwrite it
-         - No need to generate unique names for conflicting files
-      3. Update image references in Markdown files
-         - Change relative paths to Hugo standard format
-         - All image paths should start with `/img/blog/`
-    - Notify the user about the publishing results
-      - List all processed files
+      1. For each Markdown file:
+         - Validate document format:
+           - Check if all referenced images exist
+           - Verify front matter completeness
+           - If validation fails:
+             - Log the specific issues found
+             - Skip processing this document
+             - Continue with next document
+         - If validation passes, proceed with:
+           a. Copy referenced images to `{HUGO_TARGET_HOME}/static/img/blog`
+              - If target image exists, overwrite it
+              - No need to generate unique names for conflicting files
+           b. Copy Markdown file to `{HUGO_TARGET_HOME}/content/blog`
+              - If target file exists, overwrite it
+              - No need to generate unique names for conflicting files
+           c. Update image references in Markdown file
+              - Change relative paths to Hugo standard format
+              - All image paths should start with `/img/blog/`
+    - Notify the user about the publishing results:
+      - List all successfully processed files
+      - List all skipped files with their validation issues
       - Report any errors during the process
       - Include information about any overwritten files
 
