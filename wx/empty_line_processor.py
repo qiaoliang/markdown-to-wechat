@@ -56,6 +56,7 @@ class EmptyLineProcessor:
         result = []
         prev_empty = False
         prev_list_item = False
+        front_matter_count = 0
 
         for line in lines:
             is_empty = not line.strip()
@@ -69,8 +70,12 @@ class EmptyLineProcessor:
 
             # Handle front matter
             if self.is_front_matter_delimiter(line):
-                self.in_front_matter = not self.in_front_matter
+                front_matter_count += 1
+                self.in_front_matter = front_matter_count % 2 == 1
                 result.append(line)
+                # Add a single empty line after front matter ends
+                if front_matter_count == 2:
+                    result.append("\n")
                 prev_empty = False
                 continue
 
@@ -92,9 +97,13 @@ class EmptyLineProcessor:
                     prev_empty = True
                     prev_list_item = False
                     continue
+                # Keep single empty line between paragraphs
+                result.append(line)
+                prev_empty = True
+            else:
+                result.append(line)
+                prev_empty = False
 
-            result.append(line)
-            prev_empty = is_empty
             prev_list_item = is_list_item
 
         return "".join(result)

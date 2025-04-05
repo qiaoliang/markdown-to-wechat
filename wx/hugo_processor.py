@@ -304,17 +304,19 @@ class HugoProcessor:
         """
         return self.empty_line_processor.process_content(content)
 
-    def process_file(self, file_path: str) -> None:
+    def process_file(self, file_path: str) -> str:
         """
         Process a markdown file for Hugo.
 
         This includes:
         1. Format standardization
         2. Empty line removal
-        3. Copy to Hugo target directory
 
         Args:
             file_path: Path to the markdown file to process.
+
+        Returns:
+            The processed content as a string.
         """
         # 读取源文件内容
         md_file = Path(file_path)
@@ -325,10 +327,24 @@ class HugoProcessor:
         content = self.standardize_format(content)
 
         # 移除不必要的空行
-        content = self.remove_empty_lines(content)
+        content = self.empty_line_processor.process_content(content)
 
+        return content
+
+    def _copy_to_hugo_directory(self, file_path: str, content: str) -> None:
+        """
+        Copy the processed markdown file to Hugo directory.
+
+        Args:
+            file_path: Path to the source markdown file.
+            content: The processed content to write.
+
+        Raises:
+            ValueError: If HUGO_TARGET_HOME is not set or invalid.
+        """
         # 获取目标路径
         source_path = Path(self.config['source_dir'])
+        md_file = Path(file_path)
         try:
             rel_path = md_file.relative_to(source_path)
         except ValueError:
@@ -392,8 +408,10 @@ class HugoProcessor:
                     # 复制图片文件
                     self.copy_article_images(str(md_file))
 
-                    # 复制并更新 Markdown 文件
-                    self.process_file(str(md_file))
+                    # 处理并更新 Markdown 文件
+                    processed_content = self.process_file(str(md_file))
+                    self._copy_to_hugo_directory(
+                        str(md_file), processed_content)
 
                     result["processed_files"].append(file_path)
 
