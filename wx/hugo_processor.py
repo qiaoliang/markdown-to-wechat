@@ -71,6 +71,53 @@ class HugoProcessor:
 
         return config
 
+    def validate_hugo_environment(self) -> bool:
+        """
+        Validate the Hugo environment and create required directories if they don't exist.
+
+        This method checks:
+        1. HUGO_TARGET_HOME environment variable exists
+        2. The directory exists and is writable
+        3. Required subdirectories exist or can be created
+
+        Returns:
+            bool: True if environment is valid and directories are ready, False otherwise
+
+        Raises:
+            ValueError: If environment validation fails
+        """
+        try:
+            # Check HUGO_TARGET_HOME environment variable
+            hugo_home = os.environ.get("HUGO_TARGET_HOME")
+            if not hugo_home:
+                return False
+
+            hugo_path = Path(hugo_home)
+            if not hugo_path.exists():
+                return False
+
+            # Check if directory is writable by attempting to create a temporary file
+            try:
+                test_file = hugo_path / ".write_test"
+                test_file.touch()
+                test_file.unlink()
+            except (OSError, PermissionError):
+                raise ValueError("HUGO_TARGET_HOME directory is not writable")
+
+            # Create required directories
+            blog_dir = hugo_path / "content" / "blog"
+            img_dir = hugo_path / "static" / "img" / "blog"
+
+            blog_dir.mkdir(parents=True, exist_ok=True)
+            img_dir.mkdir(parents=True, exist_ok=True)
+
+            return True
+
+        except Exception as e:
+            if isinstance(e, ValueError):
+                raise e
+            return False
+
     def check_format(self, markdown_file: Path) -> List[FormatViolation]:
         """
         Check the format of a markdown file.
@@ -286,7 +333,7 @@ class HugoProcessor:
         }
 
         try:
-            # Validate HUGO_TARGET_HOME environment variable
+            # Validate Hugo environment
             hugo_home = os.environ.get("HUGO_TARGET_HOME")
             if not hugo_home:
                 raise ValueError(
@@ -297,7 +344,15 @@ class HugoProcessor:
                 raise ValueError(
                     f"HUGO_TARGET_HOME directory does not exist: {hugo_home}")
 
-            # Create necessary directories
+            # Validate directory is writable
+            try:
+                test_file = hugo_path / ".write_test"
+                test_file.touch()
+                test_file.unlink()
+            except (OSError, PermissionError):
+                raise ValueError("HUGO_TARGET_HOME directory is not writable")
+
+            # Create required directories
             content_dir = hugo_path / "content" / "blog"
             image_dir = hugo_path / "static" / "img" / "blog"
 
