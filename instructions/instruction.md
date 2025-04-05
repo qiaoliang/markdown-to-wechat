@@ -27,9 +27,17 @@ Develop a Markdown toolset using Python 3.12. The tool allows users to perform o
   - First, perform the format suitability check.
   - If all checks pass, publish all articles along with their referenced images:
     - Get the target home directory from environment variable `HUGO_TARGET_HOME`
-    - Copy Markdown files to `{HUGO_TARGET_HOME}/content/blog`
-    - Copy related images to `{HUGO_TARGET_HOME}/static/img/blog`
+    - Process in the following order:
+      1. Copy referenced images to `{HUGO_TARGET_HOME}/static/img/blog`
+         - If target image exists, overwrite it
+      2. Copy Markdown files to `{HUGO_TARGET_HOME}/content/blog`
+         - If target file exists, overwrite it
+      3. Update image references in Markdown files
+         - Change relative paths to Hugo standard format
+         - All image paths should start with `/img/blog/`
     - Notify the user about the publishing results
+      - List all processed files
+      - Report any errors during the process
 
 ### Front - Formatting for Hugo
 - **Format Consistency**:
