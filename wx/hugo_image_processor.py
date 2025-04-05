@@ -1,5 +1,7 @@
 from pathlib import Path
 import shutil
+from typing import Dict, List
+from .image_reference import extract_image_references, ImageReference
 
 
 class HugoImageProcessor:
@@ -75,3 +77,78 @@ class HugoImageProcessor:
         shutil.copy2(source_path, target_path)
 
         return target_path
+
+    def extract_image_references(self, content: str) -> List[ImageReference]:
+        """
+        Extract all image references from markdown content.
+        Reuses the functionality from image_reference module.
+
+        Args:
+            content: The markdown content to process
+
+        Returns:
+            List of ImageReference objects
+        """
+        return extract_image_references(content)
+
+    def update_image_references(self, content: str, path_mapping: Dict[str, str]) -> str:
+        """
+        Update image references in content based on the provided path mapping.
+
+        Args:
+            content: The markdown content containing image references
+            path_mapping: Dictionary mapping original image paths to new Hugo paths
+
+        Returns:
+            Updated content with new image paths
+        """
+        # Get all image references
+        references = self.extract_image_references(content)
+        updated_content = content
+
+        # Process references in reverse order to avoid position shifts
+        for ref in reversed(references):
+            if ref.path in path_mapping:
+                new_path = path_mapping[ref.path]
+                if ref.is_html:
+                    # Replace in HTML format
+                    new_ref = ref.original_text.replace(
+                        f'src="{ref.path}"', f'src="{new_path}"')
+                    new_ref = new_ref.replace(
+                        f"src='{ref.path}'", f"src='{new_path}'")
+                else:
+                    # Replace in Markdown format
+                    new_ref = f"![{ref.alt_text}]({new_path})"
+                updated_content = updated_content.replace(
+                    ref.original_text, new_ref)
+
+        return updated_content
+
+    def copy_article_images(self, md_file: str | Path) -> Dict[str, str]:
+        """
+        Copy all images referenced in a markdown file to the Hugo static directory.
+
+        Args:
+            md_file: Path to the markdown file
+
+        Returns:
+            Dictionary mapping original image paths to new Hugo paths
+        """
+        md_file_path = Path(md_file)
+        content = md_file_path.read_text()
+        references = self.extract_image_references(content)
+        path_mapping = {}
+
+        for ref in references:
+            # Convert relative paths to absolute
+            if not Path(ref.path).is_absolute():
+                source_image = md_file_path.parent / ref.path
+            else:
+                source_image = Path(ref.path)
+
+            if source_image.exists():
+                # Copy the image and get its new path
+                target_path = self.copy_image(source_image)
+                path_mapping[ref.path] = self.process_image_path(target_path)
+
+        return path_mapping
