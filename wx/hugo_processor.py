@@ -320,7 +320,7 @@ class HugoProcessor:
         content = self.standardize_format(content)
 
         # 移除不必要的空行
-        content = self.empty_line_processor.process_content(content)
+        content = self.remove_empty_lines(content)
 
         return content
 
@@ -350,7 +350,19 @@ class HugoProcessor:
             raise ValueError(
                 "HUGO_TARGET_HOME environment variable is not set")
 
-        target_file = Path(hugo_home) / "content" / "blog" / rel_path
+        hugo_path = Path(hugo_home)
+        if not hugo_path.exists():
+            raise ValueError("HUGO_TARGET_HOME directory does not exist")
+
+        # Check if directory is writable
+        try:
+            test_file = hugo_path / ".write_test"
+            test_file.touch()
+            test_file.unlink()
+        except (OSError, PermissionError):
+            raise ValueError("HUGO_TARGET_HOME directory is not writable")
+
+        target_file = hugo_path / "content" / "blog" / rel_path
         target_file.parent.mkdir(parents=True, exist_ok=True)
 
         # Write target file
@@ -370,6 +382,9 @@ class HugoProcessor:
             - errors: List of errors encountered
             - overwritten_files: List of files that were overwritten
             - success: Boolean indicating overall success
+
+        Raises:
+            ValueError: If Hugo environment validation fails
         """
         result = {
             "processed_files": [],
@@ -379,10 +394,14 @@ class HugoProcessor:
             "success": True
         }
 
+        # Validate Hugo environment first
         try:
-            # Validate Hugo environment
             self.validate_hugo_environment()
+        except ValueError as e:
+            # Re-raise environment validation errors
+            raise
 
+        try:
             # Get list of files to process
             if files is None:
                 source_path = Path(self.config['source_dir'])
