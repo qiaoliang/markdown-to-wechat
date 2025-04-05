@@ -205,10 +205,17 @@ No front matter here
     processor = HugoProcessor(
         {'source_dir': str(md_file.parent), 'target_dir': '/tmp', 'image_dir': '/tmp'})
 
-    # Act & Assert
-    with pytest.raises(ValueError) as exc_info:
-        processor.standardize_format(md_file)
-    assert "Missing front matter" in str(exc_info.value)
+    # Act
+    standardized_content = processor.standardize_format(md_file)
+
+    # Assert
+    expected_content = """---
+title="Untitled"
+---
+# Just content
+No front matter here
+"""
+    assert standardized_content == expected_content
 
     # Cleanup
     md_file.unlink()
