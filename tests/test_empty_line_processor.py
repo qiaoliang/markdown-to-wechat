@@ -13,14 +13,14 @@ def test_basic_empty_line_removal():
         "\n"
         "\n"
         "\n"
-        "Third line"
+        "Third line\n"
     )
     expected = (
         "First line\n"
         "\n"
         "Second line\n"
         "\n"
-        "Third line"
+        "Third line\n"
     )
     assert processor.process_content(content) == expected
 
@@ -28,9 +28,9 @@ def test_basic_empty_line_removal():
 def test_empty_file():
     """Test processing an empty file."""
     processor = EmptyLineProcessor()
-    assert processor.process_content("") == ""
-    assert processor.process_content("\n") == ""
-    assert processor.process_content("\n\n\n") == ""
+    assert processor.process_content("") == "\n"
+    assert processor.process_content("\n") == "\n"
+    assert processor.process_content("\n\n\n") == "\n"
 
 
 def test_single_line():
@@ -54,7 +54,7 @@ def test_code_block_preservation():
         "# Comment\n"
         "```\n"
         "\n"
-        "After code"
+        "After code\n"
     )
     expected = (
         "Before code\n"
@@ -67,7 +67,7 @@ def test_code_block_preservation():
         "# Comment\n"
         "```\n"
         "\n"
-        "After code"
+        "After code\n"
     )
     assert processor.process_content(content) == expected
 
@@ -91,7 +91,7 @@ def test_list_spacing():
         "3. Numbered 3 (new group)\n"
         "\n"
         "\n"
-        "Final paragraph"
+        "Final paragraph\n"
     )
     expected = (
         "# List test\n"
@@ -107,7 +107,7 @@ def test_list_spacing():
         "\n"
         "3. Numbered 3 (new group)\n"
         "\n"
-        "Final paragraph"
+        "Final paragraph\n"
     )
     assert processor.process_content(content) == expected
 
@@ -124,7 +124,7 @@ def test_front_matter():
         "\n"
         "First paragraph\n"
         "\n"
-        "Second paragraph"
+        "Second paragraph\n"
     )
     expected = (
         "---\n"
@@ -134,6 +134,6 @@ def test_front_matter():
         "\n"
         "First paragraph\n"
         "\n"
-        "Second paragraph"
+        "Second paragraph\n"
     )
     assert processor.process_content(content) == expected

@@ -84,7 +84,7 @@ class HugoProcessor:
 
         return config
 
-    def validate_hugo_environment(self) -> bool:
+    def validate_hugo_environment(self) -> None:
         """
         Validate the Hugo environment and create required directories if they don't exist.
 
@@ -93,43 +93,36 @@ class HugoProcessor:
         2. The directory exists and is writable
         3. Required subdirectories exist or can be created
 
-        Returns:
-            bool: True if environment is valid and directories are ready, False otherwise
-
         Raises:
-            ValueError: If environment validation fails
+            ValueError: If environment validation fails for any reason
         """
+        # Check HUGO_TARGET_HOME environment variable
+        hugo_home = os.environ.get("HUGO_TARGET_HOME")
+        if not hugo_home:
+            raise ValueError(
+                "HUGO_TARGET_HOME environment variable is not set")
+
+        hugo_path = Path(hugo_home)
+        if not hugo_path.exists():
+            raise ValueError("HUGO_TARGET_HOME directory does not exist")
+
+        # Check if directory is writable by attempting to create a temporary file
         try:
-            # Check HUGO_TARGET_HOME environment variable
-            hugo_home = os.environ.get("HUGO_TARGET_HOME")
-            if not hugo_home:
-                return False
+            test_file = hugo_path / ".write_test"
+            test_file.touch()
+            test_file.unlink()
+        except (OSError, PermissionError):
+            raise ValueError("HUGO_TARGET_HOME directory is not writable")
 
-            hugo_path = Path(hugo_home)
-            if not hugo_path.exists():
-                return False
+        # Create required directories
+        blog_dir = hugo_path / "content" / "blog"
+        img_dir = hugo_path / "static" / "img" / "blog"
 
-            # Check if directory is writable by attempting to create a temporary file
-            try:
-                test_file = hugo_path / ".write_test"
-                test_file.touch()
-                test_file.unlink()
-            except (OSError, PermissionError):
-                raise ValueError("HUGO_TARGET_HOME directory is not writable")
-
-            # Create required directories
-            blog_dir = hugo_path / "content" / "blog"
-            img_dir = hugo_path / "static" / "img" / "blog"
-
+        try:
             blog_dir.mkdir(parents=True, exist_ok=True)
             img_dir.mkdir(parents=True, exist_ok=True)
-
-            return True
-
-        except Exception as e:
-            if isinstance(e, ValueError):
-                raise e
-            return False
+        except (OSError, PermissionError) as e:
+            raise ValueError(f"Failed to create required directories: {e}")
 
     def check_format(self, markdown_file: Path) -> List[FormatViolation]:
         """
@@ -331,7 +324,7 @@ class HugoProcessor:
 
         return content
 
-    def _copy_to_hugo_directory(self, file_path: str, content: str) -> None:
+    def _copy_to_hugo_directory(self, file_path: str | Path, content: str) -> None:
         """
         Copy the processed markdown file to Hugo directory.
 
@@ -342,16 +335,16 @@ class HugoProcessor:
         Raises:
             ValueError: If HUGO_TARGET_HOME is not set or invalid.
         """
-        # 获取目标路径
+        # Get target path
         source_path = Path(self.config['source_dir'])
-        md_file = Path(file_path)
+        md_path = Path(file_path)
         try:
-            rel_path = md_file.relative_to(source_path)
+            rel_path = md_path.relative_to(source_path)
         except ValueError:
-            # 如果文件不在源目录下，使用文件名
-            rel_path = md_file.name
+            # If file is not in source directory, use file name
+            rel_path = md_path.name
 
-        # 构建目标路径
+        # Build target path
         hugo_home = os.environ.get("HUGO_TARGET_HOME")
         if not hugo_home:
             raise ValueError(
@@ -360,10 +353,10 @@ class HugoProcessor:
         target_file = Path(hugo_home) / "content" / "blog" / rel_path
         target_file.parent.mkdir(parents=True, exist_ok=True)
 
-        # 写入目标文件
+        # Write target file
         target_file.write_text(content)
 
-    def publish(self, files: List[str] | None = None) -> Dict[str, Any]:
+    def publish(self, files: List[str | Path] | None = None) -> Dict[str, Any]:
         """发布 Markdown 文件到 Hugo 目录
 
         Args:
@@ -374,54 +367,73 @@ class HugoProcessor:
             - processed_files: 成功处理的文件列表
             - skipped_files: 跳过的文件列表
             - errors: 处理过程中的错误列表
+            - success: 是否全部成功处理
+
+        Raises:
+            ValueError: 如果 Hugo 环境验证失败
         """
         result = {
             "processed_files": [],
             "skipped_files": [],
-            "errors": []
+            "errors": [],
+            "success": False
         }
 
         try:
             # 验证 Hugo 环境
-            if not self.validate_hugo_environment():
-                raise ValueError("Invalid Hugo environment")
+            self.validate_hugo_environment()
 
             # 如果没有指定文件，获取所有 Markdown 文件
             if files is None:
-                files = [str(f) for f in Path(
-                    self.config['source_dir']).glob('**/*.md')]
+                source_path = Path(self.config['source_dir'])
+                files = [str(f) for f in source_path.glob('**/*.md')]
 
             # 处理每个文件
             for file_path in files:
                 try:
                     # 验证文档
-                    validation_result = self.validate_document(file_path)
+                    validation_result = self.validate_document(str(file_path))
                     if not validation_result.is_valid:
-                        result["skipped_files"].append(file_path)
+                        result["skipped_files"].append(str(file_path))
                         result["errors"].extend(
                             validation_result.error_messages)
                         continue
 
                     # 处理有效文档
-                    md_file = Path(file_path)
-
-                    # 复制图片文件
-                    self.copy_article_images(str(md_file))
+                    md_path = Path(file_path)
 
                     # 处理并更新 Markdown 文件
-                    processed_content = self.process_file(str(md_file))
-                    self._copy_to_hugo_directory(
-                        str(md_file), processed_content)
+                    processed_content = self.process_file(str(md_path))
 
-                    result["processed_files"].append(file_path)
+                    # 复制图片文件
+                    image_mapping = self.copy_article_images(md_path)
+                    if image_mapping:
+                        # 添加成功复制的图片路径
+                        for img_path in image_mapping.keys():
+                            full_img_path = md_path.parent / img_path
+                            result["processed_files"].append(
+                                str(full_img_path))
+                        # 更新图片引用
+                        processed_content = self.update_image_references(
+                            processed_content, image_mapping)
+
+                    # 复制 Markdown 文件
+                    self._copy_to_hugo_directory(md_path, processed_content)
+                    result["processed_files"].append(str(md_path))
 
                 except Exception as e:
                     result["errors"].append(
                         f"Error processing {file_path}: {str(e)}")
-                    result["skipped_files"].append(file_path)
+                    result["skipped_files"].append(str(file_path))
 
-        except Exception as e:
-            result["errors"].append(f"Global error: {str(e)}")
+            # 设置成功标志
+            result["success"] = len(result["errors"]) == 0 and len(
+                result["processed_files"]) > 0
+
+        except ValueError as e:
+            result["errors"].append(str(e))
+            result["success"] = False
+            raise  # Re-raise the ValueError for environment validation failures
 
         return result
 
@@ -575,15 +587,75 @@ class HugoProcessor:
 
         return result
 
-    def copy_article_images(self, md_file: str) -> None:
+    def copy_article_images(self, md_file: str | Path) -> Dict[str, str]:
         """
         Copy images referenced in a markdown file to the Hugo static directory.
         If target images already exist, they will be overwritten.
 
         Args:
             md_file: Path to the markdown file
+
+        Returns:
+            Dictionary mapping original image paths to new Hugo paths
         """
-        self.image_processor.copy_article_images(md_file)
+        image_mapping = {}
+
+        # Get all image references from the markdown file
+        md_path = Path(md_file)
+        content = md_path.read_text()
+
+        # Get all image references from the markdown file
+        image_refs = self.image_processor.extract_image_references(content)
+        if not image_refs:
+            return image_mapping
+
+        # Get source directory path and markdown file's relative path
+        source_path = Path(self.config['source_dir'])
+        try:
+            md_rel_dir = md_path.parent.relative_to(source_path)
+        except ValueError:
+            # If the markdown file is not under source_path, return empty mapping
+            return image_mapping
+
+        # Prepare target directory base
+        hugo_home = os.environ.get("HUGO_TARGET_HOME")
+        if not hugo_home:
+            return image_mapping
+
+        hugo_path = Path(hugo_home)
+        # Process each image reference
+        for img_ref in image_refs:
+            # Skip external images
+            if img_ref.path.startswith(('http://', 'https://')):
+                continue
+
+            # Resolve image path relative to markdown file
+            img_path = md_path.parent / img_ref.path
+            if not img_path.exists():
+                continue
+
+            # Create target directory structure based on markdown file's location
+            target_img_dir = hugo_path / "static" / "img" / "blog"
+            if str(md_rel_dir) != '.':
+                # Only use the first directory level
+                target_img_dir = target_img_dir / md_rel_dir.parts[0]
+            target_img_dir.mkdir(parents=True, exist_ok=True)
+
+            # Prepare target file name and path
+            target_name = img_path.name
+            target_path = target_img_dir / target_name
+
+            # Copy the image file (always overwrite)
+            target_path.write_bytes(img_path.read_bytes())
+
+            # Update the mapping with paths relative to Hugo root
+            if str(md_rel_dir) == '.':
+                new_path = f"/img/blog/{target_name}"
+            else:
+                new_path = f"/img/blog/{md_rel_dir.parts[0]}/{target_name}"
+            image_mapping[img_ref.path] = new_path
+
+        return image_mapping
 
     def validate_document(self, file_path: str) -> ValidationResult:
         """验证单个 Markdown 文档的格式

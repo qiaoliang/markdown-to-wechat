@@ -36,51 +36,40 @@ class EmptyLineProcessor:
 
         Returns:
             The processed content with unnecessary empty lines removed.
+            Always ends with a newline character.
         """
         if not content:
-            return ""
+            return "\n"
 
         # Split content into lines, preserving line endings
         lines = content.splitlines(keepends=True)
-
-        # Remove empty lines at the start and end
-        while lines and not lines[0].strip():
-            lines.pop(0)
-        while lines and not lines[-1].strip():
-            lines.pop()
-
-        if not lines:
-            return ""
 
         # Process middle content
         result = []
         prev_empty = False
         prev_list_item = False
-        front_matter_count = 0
+        in_front_matter = False
+        in_code_block = False
 
         for line in lines:
             is_empty = not line.strip()
 
             # Handle code blocks
             if self.is_code_block_delimiter(line):
-                self.in_code_block = not self.in_code_block
+                in_code_block = not in_code_block
                 result.append(line)
                 prev_empty = False
                 continue
 
             # Handle front matter
             if self.is_front_matter_delimiter(line):
-                front_matter_count += 1
-                self.in_front_matter = front_matter_count % 2 == 1
+                in_front_matter = not in_front_matter
                 result.append(line)
-                # Add a single empty line after front matter ends
-                if front_matter_count == 2:
-                    result.append("\n")
                 prev_empty = False
                 continue
 
             # Preserve content in code blocks and front matter
-            if self.in_code_block or self.in_front_matter:
+            if in_code_block or in_front_matter:
                 result.append(line)
                 continue
 
@@ -106,4 +95,8 @@ class EmptyLineProcessor:
 
             prev_list_item = is_list_item
 
-        return "".join(result)
+        # Ensure content ends with a single newline
+        content = "".join(result)
+        if not content.endswith("\n"):
+            content += "\n"
+        return content

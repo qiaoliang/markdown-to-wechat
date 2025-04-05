@@ -64,8 +64,16 @@ The Markdown toolset is designed with a modular architecture, separating concern
 #### 5.2 Empty Line Processor (`empty_line_processor.py`)
 - Handles empty line management
 - Preserves semantic structure
-- Special case handling for code blocks and lists
-- Current coverage: 97%
+- Features:
+  - Markdown standard compliance
+  - Empty line normalization
+  - Special case handling:
+    - Code blocks preservation
+    - List item spacing
+    - Front matter formatting
+  - Always ensures files end with newline
+  - Proper empty file handling
+- Current coverage: 100%
 
 #### 5.3 Front Matter Handler (`hugo_front_matter.py`)
 - Manages Hugo front matter
@@ -143,7 +151,16 @@ wx/
 1. Empty Line Processing
    - Input: Markdown content
    - Output: Processed content with standardized empty lines
-   - Rules: See Empty Line Removal section
+   - Rules: 
+     - Remove multiple consecutive empty lines
+     - Preserve semantic structure
+     - Maintain Markdown standard compliance
+     - Always end files with newline
+     - Handle empty files properly
+   - Special cases:
+     - Code blocks: preserve all empty lines
+     - Lists: maintain grouping with empty lines
+     - Front matter: remove internal empty lines
 
 2. Front Matter Processing
    - Input: Markdown front matter

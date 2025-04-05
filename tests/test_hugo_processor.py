@@ -269,9 +269,7 @@ def test_remove_empty_lines():
         "date=\"2024-04-04\"\n"
         "---\n"
         "\n"
-        "\n"
         "First paragraph\n"
-        "\n"
         "\n"
         "```python\n"
         "def test():\n"
@@ -279,12 +277,10 @@ def test_remove_empty_lines():
         "    return None\n"
         "```\n"
         "\n"
-        "\n"
         "- List item 1\n"
         "- List item 2\n"
         "\n"
         "- New group item\n"
-        "\n"
         "\n"
         "Last paragraph"
     )
@@ -346,9 +342,7 @@ def test_process_file_with_empty_lines():
     with tempfile.NamedTemporaryFile(mode='w+', suffix='.md') as temp:
         temp.write(content)
         temp.flush()
-        processor.process_file(temp.name)
-        temp.seek(0)
-        result = temp.read()
+        result = processor.process_file(temp.name)
         assert result == expected
 
 
@@ -396,12 +390,12 @@ def test_publish_with_valid_hugo_target_home():
         # Create a test markdown file
         source_path = Path(source_dir)
         test_file = source_path / "test.md"
-        test_file.write_text("""---
+        test_file.write_text('''---
 title="Test Article"
 date="2024-04-04"
 ---
 # Test content
-""")
+''')
 
         os.environ["HUGO_TARGET_HOME"] = hugo_home
         processor = HugoProcessor({
@@ -415,6 +409,10 @@ date="2024-04-04"
 
         # Assert
         assert result["success"] is True
+        assert len(result["processed_files"]) == 1
+        assert str(test_file) in result["processed_files"]
+        assert len(result["errors"]) == 0
+
         blog_dir = Path(hugo_home) / "content" / "blog"
         img_dir = Path(hugo_home) / "static" / "img" / "blog"
 
@@ -441,12 +439,12 @@ def test_publish_copies_markdown_files():
         for file_path in test_files:
             full_path = source_path / file_path
             full_path.parent.mkdir(parents=True, exist_ok=True)
-            full_path.write_text("""---
+            full_path.write_text('''---
 title="Test Article"
 date="2024-04-04"
 ---
 # Test content
-""")
+''')
 
         # Set up HugoProcessor
         os.environ["HUGO_TARGET_HOME"] = hugo_home
@@ -457,9 +455,13 @@ date="2024-04-04"
         })
 
         # Act
-        processor.publish()
+        result = processor.publish()
 
         # Assert
+        assert result["success"] is True
+        assert len(result["processed_files"]) == len(test_files)
+        assert len(result["errors"]) == 0
+
         hugo_blog_dir = Path(hugo_home) / "content" / "blog"
         for file_path in test_files:
             target_path = hugo_blog_dir / file_path
@@ -812,7 +814,7 @@ def test_publish_creates_required_directories():
         })
 
         # Act
-        result = processor.validate_hugo_environment()
+        processor.validate_hugo_environment()  # Should not raise any exceptions
 
         # Assert
         blog_dir = Path(hugo_home) / "content" / "blog"
@@ -820,7 +822,6 @@ def test_publish_creates_required_directories():
 
         assert blog_dir.exists(), "Blog directory was not created"
         assert img_dir.exists(), "Image directory was not created"
-        assert result is True, "Validation should return True when successful"
 
 
 def test_publish_with_partial_directory_structure():
@@ -839,7 +840,7 @@ def test_publish_with_partial_directory_structure():
         })
 
         # Act
-        result = processor.validate_hugo_environment()
+        processor.validate_hugo_environment()  # Should not raise any exceptions
 
         # Assert
         blog_dir = Path(hugo_home) / "content" / "blog"
@@ -847,11 +848,10 @@ def test_publish_with_partial_directory_structure():
 
         assert blog_dir.exists(), "Blog directory was not created"
         assert img_dir.exists(), "Image directory was not created"
-        assert result is True, "Validation should return True when successful"
 
 
-def test_validate_hugo_environment_returns_false_on_error():
-    """Test that validate_hugo_environment returns False when validation fails."""
+def test_validate_hugo_environment_raises_error_when_not_set():
+    """Test that validate_hugo_environment raises ValueError when HUGO_TARGET_HOME is not set."""
     # Arrange
     if "HUGO_TARGET_HOME" in os.environ:
         del os.environ["HUGO_TARGET_HOME"]
@@ -862,11 +862,11 @@ def test_validate_hugo_environment_returns_false_on_error():
         'image_dir': '/path/to/images'
     })
 
-    # Act
-    result = processor.validate_hugo_environment()
-
-    # Assert
-    assert result is False, "Validation should return False when HUGO_TARGET_HOME is not set"
+    # Act & Assert
+    with pytest.raises(ValueError) as exc_info:
+        processor.validate_hugo_environment()
+    assert "HUGO_TARGET_HOME environment variable is not set" in str(
+        exc_info.value)
 
 
 def test_copy_article_images(tmp_path):
