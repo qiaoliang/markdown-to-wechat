@@ -230,34 +230,84 @@ class OpenRouterService:
             "人工智能"
         ]
 
+        # Extract content without front matter
+        content_without_front_matter = content.split(
+            "---", 1)[1] if "---" in content else content
+
+        # Clean up the content
+        content_lines = content_without_front_matter.strip().split("\n")
+        # Remove empty lines and clean up markdown headers
+        clean_lines = []
+        for line in content_lines:
+            line = line.strip()
+            if not line:
+                continue
+            # Remove markdown header markers but preserve the text
+            if line.startswith('#'):
+                line = line.lstrip('#').strip()
+            clean_lines.append(line)
+
+        # Take first few paragraphs for context
+        clean_content = " ".join(clean_lines[:5])
+
         # If we have maximum categories, only use existing ones
         if existing_categories and len(existing_categories) >= 10:
-            return self._get_response_with_retry(
+            response = self._get_response_with_retry(
                 "你是一个内容分类器。根据下面的文章内容，从以下列表中选择一个最合适的分类：\n"
                 f"{', '.join(existing_categories)}\n\n"
                 "内容：\n"
-                f"{content}\n\n"
+                f"{clean_content}\n\n"
                 "只回复分类名称，不要解释。"
             )
+            category = response.strip()
+            # If no valid category is returned, use the most appropriate existing one
+            if not category or category not in existing_categories:
+                # For Python/programming content, prefer software engineering related categories
+                if any(word in clean_content.lower() for word in ['python', 'programming', 'code', 'software']):
+                    for preferred in ['软件工程', 'AI编程', '工程效率']:
+                        if preferred in existing_categories:
+                            return preferred
+                # Default to the first category if no better match
+                return existing_categories[0]
+            return category
 
         # Otherwise, try to use predefined categories first
-        category = self._get_response_with_retry(
+        response = self._get_response_with_retry(
             "你是一个内容分类器。根据下面的文章内容，从以下列表中选择一个最合适的分类：\n"
             f"{', '.join(predefined)}\n\n"
             "内容：\n"
-            f"{content}\n\n"
+            f"{clean_content}\n\n"
             "如果没有合适的分类，建议一个新的分类名称（最多3个词）。只回复分类名称，"
             "不要解释或标点。"
         )
 
-        # Clean up the response
-        category = category.strip(' .:')  # Remove dots, colons, and spaces
-        words = category.split()
-        if len(words) > 3:
-            # If the category is too long, try to extract key words or use the first three words
-            category = ' '.join(words[:3])
+        category = response.strip()
 
-        return category
+        # Validate the category
+        if not category:
+            return "个人观点"  # Default category
+
+        # Clean up the category
+        category = (category
+                    .replace('#', '')
+                    .replace('`', '')
+                    .replace('"', '')
+                    .replace("'", "")
+                    .replace("\n", " ")  # Replace newlines with spaces
+                    .strip())
+
+        # If category is not in predefined list, ensure it's valid
+        if category not in predefined:
+            # Ensure it's not too long
+            words = category.split()
+            if len(words) > 3:
+                category = " ".join(words[:3])
+
+            # Ensure it only contains valid characters
+            category = "".join(c for c in category
+                               if c.isalnum() or c.isspace() or '\u4e00' <= c <= '\u9fff')
+
+        return category.strip()
 
     def generate_seo_keywords(self, content: str) -> List[str]:
         """Generate SEO-friendly keywords from the article content.

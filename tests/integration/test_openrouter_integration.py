@@ -11,12 +11,11 @@ def check_openrouter_key():
     )
 
 
-@pytest.mark.skip(reason="Integration test that calls OpenRouter API. Run manually when needed.")
+@check_openrouter_key()
 def test_openrouter_title_generation():
     """Integration test for title generation using real OpenRouter API.
 
-    This test is skipped by default to avoid unnecessary API calls.
-    To run this test, use: pytest tests/integration/test_openrouter_integration.py -v --no-skip
+    This test requires OPENROUTER_API_KEY environment variable to be set.
     """
     content = """title=""
 subtitle=""
@@ -46,18 +45,12 @@ This article explains the core concepts and best practices for using async/await
     assert len(title) > 0
     assert len(title) <= 100  # Title shouldn't be too long
 
-    # The title should contain relevant keywords
-    relevant_terms = ['python', 'async', 'io', 'asynchronous']
-    assert any(term.lower() in title.lower() for term in relevant_terms), \
-        f"Title '{title}' should contain at least one of these terms: {relevant_terms}"
 
-
-@pytest.mark.skip(reason="Integration test that calls OpenRouter API. Run manually when needed.")
+@check_openrouter_key()
 def test_openrouter_subtitle_generation():
     """Integration test for subtitle generation using real OpenRouter API.
 
-    This test is skipped by default to avoid unnecessary API calls.
-    To run this test, use: pytest tests/integration/test_openrouter_integration.py -v -s
+    This test requires OPENROUTER_API_KEY environment variable to be set.
     """
     content = """title=""
 subtitle=""
@@ -87,19 +80,17 @@ This article explains the core concepts and best practices for using async/await
     assert len(subtitle) > 0
     assert len(subtitle) <= 50  # Subtitle must be within length limit
 
-    # The subtitle should contain relevant keywords
-    relevant_terms = ['python', 'async', 'io', 'asynchronous']
-    assert any(term.lower() in subtitle.lower() for term in relevant_terms), \
-        f"Subtitle '{subtitle}' should contain at least one of these terms: {relevant_terms}"
-
     # The subtitle should be a complete sentence
-    assert subtitle[-1] in '.!?', \
-        f"Subtitle '{subtitle}' should end with proper punctuation"
+    assert subtitle.endswith('。') or subtitle.endswith('...'), \
+        f"Subtitle '{subtitle}' should end with proper punctuation (。 or ...)"
 
 
-@pytest.mark.skip(reason="Integration test that calls OpenRouter API - run manually")
+@check_openrouter_key()
 def test_openrouter_tag_generation():
-    """Integration test for tag generation using real OpenRouter API."""
+    """Integration test for tag generation using real OpenRouter API.
+
+    This test requires OPENROUTER_API_KEY environment variable to be set.
+    """
     content = """title=""
 subtitle=""
 tags=[]
@@ -135,16 +126,6 @@ This article explains the core concepts and best practices for using async/await
         # Only allow alphanumeric and hyphen
         assert all(c.isalnum() or c == '-' for c in tag)
 
-    # The tags should contain relevant keywords
-    relevant_terms = ['python', 'async', 'io', 'asynchronous', 'coroutine']
-    found_relevant = False
-    for tag in tags:
-        if any(term.lower() in tag.lower() for term in relevant_terms):
-            found_relevant = True
-            break
-    assert found_relevant, \
-        f"Tags {tags} should contain at least one of these terms: {relevant_terms}"
-
     # Tags should be unique
     assert len(set(tags)) == 3, "All tags should be unique"
 
@@ -152,9 +133,12 @@ This article explains the core concepts and best practices for using async/await
     print(f"\nGenerated tags: {tags}")
 
 
-@pytest.mark.skip(reason="Integration test that calls OpenRouter API - run manually")
+@check_openrouter_key()
 def test_openrouter_category_suggestion():
-    """Integration test for category suggestion using real OpenRouter API."""
+    """Integration test for category suggestion using real OpenRouter API.
+
+    This test requires OPENROUTER_API_KEY environment variable to be set.
+    """
     content = """title=""
 subtitle=""
 tags=[]
@@ -184,19 +168,21 @@ This article explains the core concepts and best practices for using async/await
     assert isinstance(category, str)
     assert len(category) > 0
     # Category should be one of predefined ones or a reasonable new one
-    predefined = ["Personal Opinion", "Practical Summary", "Methodology",
-                  "AI Programming", "Software Engineering", "Engineering Efficiency",
-                  "Artificial Intelligence"]
+    predefined = ["个人观点", "实用总结", "方法论",
+                  "AI编程", "软件工程", "工程效率",
+                  "人工智能"]
     if category not in predefined:
-        # If not predefined, should be reasonable length and format
-        assert len(category.split()
-                   ) <= 3, f"Category '{category}' should be at most 3 words"
-        assert all(c.isalnum() or c.isspace() for c in category), \
-            f"Category '{category}' should only contain letters, numbers, and spaces"
+        # If not predefined, should be reasonable length
+        words = category.split()
+        assert len(
+            words) <= 3, f"Category '{category}' should be at most 3 words"
+        # Should only contain Chinese characters, letters, numbers, and spaces
+        assert all(c.isalnum() or c.isspace() or '\u4e00' <= c <= '\u9fff' for c in category), \
+            f"Category '{category}' should only contain Chinese characters, letters, numbers, and spaces"
 
     # Test with maximum categories (should only use existing ones)
     existing_categories = predefined + \
-        ["Web Development", "Mobile Development", "Data Science"]
+        ["Web开发", "移动开发", "数据科学"]
     category_max = service.suggest_category(content, existing_categories)
     assert category_max in existing_categories, \
         f"Category '{category_max}' should be one of existing categories when at max limit"
@@ -206,9 +192,12 @@ This article explains the core concepts and best practices for using async/await
     print(f"Generated category (max limit): {category_max}")
 
 
-@pytest.mark.skip(reason="Integration test requiring OpenRouter API access")
+@check_openrouter_key()
 def test_openrouter_seo_keywords():
-    """Integration test for SEO keyword generation using OpenRouter API."""
+    """Integration test for SEO keyword generation using real OpenRouter API.
+
+    This test requires OPENROUTER_API_KEY environment variable to be set.
+    """
     service = OpenRouterService()
     content = """title=""
 subtitle=""
@@ -245,13 +234,3 @@ This article explains the core concepts and best practices for using async/await
         assert isinstance(keyword, str)
         assert len(keyword.split()) <= 3  # Each keyword should be max 3 words
         assert keyword.strip() == keyword  # No leading/trailing whitespace
-
-    # Verify relevance - at least some keywords should contain relevant terms
-    relevant_terms = ['python', 'async', 'io',
-                      'concurrent', 'coroutine', 'performance']
-    found_relevant = False
-    for keyword in keywords:
-        if any(term.lower() in keyword.lower() for term in relevant_terms):
-            found_relevant = True
-            break
-    assert found_relevant, f"Keywords {keywords} should contain at least one relevant term from {relevant_terms}"

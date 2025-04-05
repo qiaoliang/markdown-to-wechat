@@ -47,7 +47,7 @@ Develop a Markdown toolset using Python 3.12. The tool allows users to perform o
   - **Banner**:
     - If `banner` is missing or empty, set it to `https://picsum.photos/id/{value}/900/300.jpg`, where `{value}` is a random number between 1 and 100.
   - **Categories**:
-    - If `categories` are empty, assign the article to one of the following categories: [Personal Opinion, Practical Summary, Methodology, AI Programming, Software Engineering, Engineering Efficiency, Artificial Intelligence].
+    - If `categories` are empty, assign the article to one of the following categories: ["个人观点", "实用总结", "方法论","AI编程", "软件工程", "工程效率","人工智能"].
     - If none of these fit, create a new category, ensuring the total number of categories does not exceed 10.
   - **Keywords**:
     - If `keywords` are empty, find up to 20 SEO - friendly keywords related to the article content and format them as `keywords=["keyword1","keyword2","keyword3"]`.

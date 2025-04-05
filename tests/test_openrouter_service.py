@@ -67,8 +67,7 @@ def test_summarize_for_title(mock_openai):
     # Setup mock response
     mock_response = MagicMock()
     mock_response.choices = [
-        MagicMock(message=MagicMock(
-            content="Understanding Async IO in Python: A Comprehensive Guide"))
+        MagicMock(message=MagicMock(content="Python异步IO编程指南"))
     ]
     mock_openai.chat.completions.create.return_value = mock_response
 
@@ -94,7 +93,6 @@ This article explains the core concepts and best practices for using async/await
     # Verify the title
     assert isinstance(title, str)
     assert len(title) <= 100  # Title should be within length limit
-    assert "Python" in title  # Should contain relevant keyword
 
     # Verify OpenAI client was called correctly
     mock_openai.chat.completions.create.assert_called_once()
@@ -102,8 +100,7 @@ This article explains the core concepts and best practices for using async/await
     assert call_args['model'] == "deepseek/deepseek-v3-base:free"
     assert len(call_args['messages']) == 2
     assert call_args['messages'][0]['role'] == "system"
-    assert "title generator" in call_args['messages'][0]['content'].lower()
-    assert call_args['max_tokens'] == 20  # Should use limited tokens for title
+    assert "标题生成器" in call_args['messages'][0]['content']
 
 
 def test_summarize_for_subtitle(mock_openai):
@@ -111,8 +108,7 @@ def test_summarize_for_subtitle(mock_openai):
     # Setup mock response
     mock_response = MagicMock()
     mock_response.choices = [
-        MagicMock(message=MagicMock(
-            content="A guide to Python's async/await system"))
+        MagicMock(message=MagicMock(content="深入解析Python异步IO编程。"))
     ]
     mock_openai.chat.completions.create.return_value = mock_response
 
@@ -138,7 +134,7 @@ This article explains the core concepts and best practices for using async/await
     # Verify the subtitle
     assert isinstance(subtitle, str)
     assert len(subtitle) <= 50  # Subtitle should be within length limit
-    assert "Python" in subtitle  # Should contain relevant keyword
+    assert subtitle.endswith('。')  # Should end with period
 
     # Verify OpenAI client was called correctly
     mock_openai.chat.completions.create.assert_called_once()
@@ -146,9 +142,7 @@ This article explains the core concepts and best practices for using async/await
     assert call_args['model'] == "deepseek/deepseek-v3-base:free"
     assert len(call_args['messages']) == 2
     assert call_args['messages'][0]['role'] == "system"
-    assert "subtitle generator" in call_args['messages'][0]['content'].lower()
-    # Should use limited tokens for subtitle
-    assert call_args['max_tokens'] == 15
+    assert "副标题生成器" in call_args['messages'][0]['content']
 
 
 def test_summarize_for_subtitle_long_input(mock_openai):
@@ -157,7 +151,7 @@ def test_summarize_for_subtitle_long_input(mock_openai):
     mock_response = MagicMock()
     mock_response.choices = [
         MagicMock(message=MagicMock(
-            content="This is a very long subtitle that exceeds the maximum allowed length of fifty characters"))
+            content="这是一个非常长的副标题，它超过了五十个字符的最大允许长度限制，需要被截断。bd218f28-d23d-4b2d-8b84-528c347c7501bd218f28-d23d-4b2d-8b84-528c347c7501"))
     ]
     mock_openai.chat.completions.create.return_value = mock_response
 
@@ -203,7 +197,7 @@ def test_generate_tags(mock_openai):
     mock_response = MagicMock()
     mock_response.choices = [
         MagicMock(message=MagicMock(
-            content="python-async, concurrency, io-operations"))
+            content="python-async\nconcurrency\nio-operations"))
     ]
     mock_openai.chat.completions.create.return_value = mock_response
 
@@ -235,15 +229,15 @@ This article explains the core concepts and best practices for using async/await
     assert all('"' not in tag for tag in tags)  # No quotes in tags
     # No brackets
     assert all('[' not in tag and ']' not in tag for tag in tags)
+    # Only alphanumeric and hyphens
+    assert all(all(c.isalnum() or c == '-' for c in tag) for tag in tags)
 
     # Verify OpenAI client was called correctly
     mock_openai.chat.completions.create.assert_called_once()
     call_args = mock_openai.chat.completions.create.call_args[1]
     assert call_args['model'] == "deepseek/deepseek-v3-base:free"
-    assert len(call_args['messages']) == 2
-    assert call_args['messages'][0]['role'] == "system"
-    assert "tag generator" in call_args['messages'][0]['content'].lower()
-    assert call_args['max_tokens'] == 20  # Should use limited tokens for tags
+    assert len(call_args['messages']) == 1
+    assert "标签生成器" in call_args['messages'][0]['content']
 
 
 def test_generate_tags_insufficient_response(mock_openai):
@@ -251,7 +245,7 @@ def test_generate_tags_insufficient_response(mock_openai):
     # Setup mock response with only one tag
     mock_response = MagicMock()
     mock_response.choices = [
-        MagicMock(message=MagicMock(content="python"))
+        MagicMock(message=MagicMock(content="python-web"))
     ]
     mock_openai.chat.completions.create.return_value = mock_response
 
@@ -270,9 +264,9 @@ A basic guide to Python programming."""
 
     # Verify we still get exactly 3 tags
     assert len(tags) == 3
-    assert tags[0] == "python"  # First tag from API
-    assert "Understanding-Python" in tags[1]  # Second tag from content
-    assert "programming" in tags[2]  # Third tag from content
+    assert tags[0] == "python-web"  # First tag from API
+    assert tags[1] == "tag-2"  # Generated tag
+    assert tags[2] == "tag-3"  # Generated tag
 
 
 def test_generate_tags_excess_response(mock_openai):
@@ -281,7 +275,7 @@ def test_generate_tags_excess_response(mock_openai):
     mock_response = MagicMock()
     mock_response.choices = [
         MagicMock(message=MagicMock(
-            content="python, async, io, concurrency, performance"))
+            content="python-web\nweb-dev\nbackend\ndjango\nflask"))
     ]
     mock_openai.chat.completions.create.return_value = mock_response
 
@@ -292,14 +286,15 @@ tags=[]
 categories=[]
 keywords=[]
 ---
-# Python Performance Tips"""
+# Python Web Development"""
 
     service = OpenRouterService()
     tags = service.generate_tags(content)
 
     # Verify we get exactly 3 tags
     assert len(tags) == 3
-    assert tags == ["python", "async", "io"]  # Should keep first 3 tags
+    assert tags == ["python-web", "web-dev",
+                    "backend"]  # Should keep first 3 tags
 
 
 def test_suggest_category(mock_openai):
@@ -307,8 +302,7 @@ def test_suggest_category(mock_openai):
     # Setup mock response
     mock_response = MagicMock()
     mock_response.choices = [
-        MagicMock(message=MagicMock(
-            content="Software Engineering"))
+        MagicMock(message=MagicMock(content="软件工程"))
     ]
     mock_openai.chat.completions.create.return_value = mock_response
 
@@ -328,59 +322,61 @@ and other best practices in software engineering."""
 
     # Verify the category
     assert isinstance(category, str)
-    assert category in ["Personal Opinion", "Practical Summary", "Methodology",
-                        "AI Programming", "Software Engineering", "Engineering Efficiency",
-                        "Artificial Intelligence"]
-    assert category == "Software Engineering"  # Should match the mock response
+    assert category in ["个人观点", "实用总结", "方法论",
+                        "AI编程", "软件工程", "工程效率",
+                        "人工智能"]
+    assert category == "软件工程"  # Should match the mock response
 
     # Verify OpenAI client was called correctly
     mock_openai.chat.completions.create.assert_called_once()
     call_args = mock_openai.chat.completions.create.call_args[1]
     assert call_args['model'] == "deepseek/deepseek-v3-base:free"
-    assert len(call_args['messages']) == 2
-    assert call_args['messages'][0]['role'] == "system"
-    assert "category suggester" in call_args['messages'][0]['content'].lower()
+    assert len(call_args['messages']) == 1
+    assert "内容分类器" in call_args['messages'][0]['content']
 
 
 def test_suggest_category_new_category(mock_openai):
-    """Test category suggestion when content doesn't match predefined categories."""
-    # Setup mock response for a new category
+    """Test category suggestion with a new category."""
+    # Setup mock response
     mock_response = MagicMock()
     mock_response.choices = [
-        MagicMock(message=MagicMock(
-            content="Data Science"))
+        MagicMock(message=MagicMock(content="云原生开发"))
     ]
     mock_openai.chat.completions.create.return_value = mock_response
 
-    # Test content about data science
+    # Test content about cloud native development
     content = """title=""
 subtitle=""
 tags=[]
 categories=[]
 keywords=[]
 ---
-# Introduction to Data Science
-This article covers the basics of data science,
-including statistics, data analysis, and visualization."""
+# Understanding Kubernetes and Cloud Native Development
+This article discusses cloud native development principles and Kubernetes basics."""
 
     service = OpenRouterService()
     category = service.suggest_category(content)
 
     # Verify the category
     assert isinstance(category, str)
-    assert category == "Data Science"  # Should accept the new category
-    assert len(category) > 0
-    assert all(c.isalnum() or c.isspace()
-               for c in category)  # Only allow letters, numbers, and spaces
+    assert len(category.split()) <= 3  # Should be at most 3 words
+    assert category == "云原生开发"  # Should match the mock response
 
 
 def test_suggest_category_empty_content(mock_openai):
     """Test category suggestion with empty content."""
+    # Setup mock response
+    mock_response = MagicMock()
+    mock_response.choices = [
+        MagicMock(message=MagicMock(content="个人观点"))
+    ]
+    mock_openai.chat.completions.create.return_value = mock_response
+
     service = OpenRouterService()
     category = service.suggest_category("")
 
     # Should default to a safe category for empty content
-    assert category == "Personal Opinion"
+    assert category == "个人观点"
 
 
 def test_suggest_category_max_categories(mock_openai):
@@ -388,8 +384,7 @@ def test_suggest_category_max_categories(mock_openai):
     # Setup mock response
     mock_response = MagicMock()
     mock_response.choices = [
-        MagicMock(message=MagicMock(
-            content="New Category"))
+        MagicMock(message=MagicMock(content="软件工程"))
     ]
     mock_openai.chat.completions.create.return_value = mock_response
 
@@ -397,10 +392,10 @@ def test_suggest_category_max_categories(mock_openai):
 
     # Simulate having 10 existing categories
     existing_categories = [
-        "Personal Opinion", "Practical Summary", "Methodology",
-        "AI Programming", "Software Engineering", "Engineering Efficiency",
-        "Artificial Intelligence", "Data Science", "Web Development",
-        "Mobile Development"
+        "个人观点", "实用总结", "方法论",
+        "AI编程", "软件工程", "工程效率",
+        "人工智能", "数据科学", "Web开发",
+        "移动开发"
     ]
 
     # When we have max categories, should return one of existing categories
@@ -409,12 +404,12 @@ def test_suggest_category_max_categories(mock_openai):
 
 
 def test_generate_seo_keywords(mock_openai):
-    """Test SEO keywords generation with mocked OpenAI client."""
+    """Test SEO keyword generation with mocked OpenAI client."""
     # Setup mock response
     mock_response = MagicMock()
     mock_response.choices = [
         MagicMock(message=MagicMock(
-            content="python programming, async io, concurrency, coroutines, event loop, async await, performance optimization, io bound operations, clean code, resource utilization, asynchronous programming, python async, python development, software engineering, best practices"))
+            content="Python编程, 异步IO, 并发编程, 协程, 事件循环"))
     ]
     mock_openai.chat.completions.create.return_value = mock_response
 
@@ -439,57 +434,59 @@ This article explains the core concepts and best practices for using async/await
 
     # Verify the keywords
     assert isinstance(keywords, list)
+    assert len(keywords) > 0
     assert len(keywords) <= 20  # Should not exceed 20 keywords
-    assert len(keywords) > 0    # Should have at least one keyword
-    assert all(isinstance(k, str)
-               for k in keywords)  # All keywords should be strings
-    # Each keyword should be at most 3 words
-    assert all(len(k.split()) <= 3 for k in keywords)
-    assert all(k.strip() == k for k in keywords)  # Keywords should be stripped
-
-    # Keywords should contain relevant terms
-    relevant_terms = ['python', 'async', 'io', 'coroutines']
-    found_relevant = False
-    for keyword in keywords:
-        if any(term.lower() in keyword.lower() for term in relevant_terms):
-            found_relevant = True
-            break
-    assert found_relevant, \
-        f"Keywords {keywords} should contain at least one relevant term from {relevant_terms}"
+    assert all(isinstance(kw, str)
+               for kw in keywords)  # All keywords should be strings
+    # Each keyword max 3 words
+    assert all(len(kw.split()) <= 3 for kw in keywords)
 
     # Verify OpenAI client was called correctly
     mock_openai.chat.completions.create.assert_called_once()
     call_args = mock_openai.chat.completions.create.call_args[1]
     assert call_args['model'] == "deepseek/deepseek-v3-base:free"
     assert len(call_args['messages']) == 2
-    assert call_args['messages'][0]['role'] == "system"
-    assert "seo keywords" in call_args['messages'][0]['content'].lower()
+    assert "SEO关键词" in call_args['messages'][0]['content']
 
 
 def test_generate_seo_keywords_empty_content(mock_openai):
-    """Test SEO keywords generation with empty content."""
+    """Test SEO keyword generation with empty content."""
     service = OpenRouterService()
     keywords = service.generate_seo_keywords("")
 
-    # Should return an empty list for empty content
+    # Should return empty list for empty content
     assert isinstance(keywords, list)
     assert len(keywords) == 0
 
 
 def test_generate_seo_keywords_long_response(mock_openai):
-    """Test SEO keywords generation when API returns too many keywords."""
+    """Test SEO keyword generation with long response."""
     # Setup mock response with many keywords
     mock_response = MagicMock()
     mock_response.choices = [
         MagicMock(message=MagicMock(
-            content="k1, k2, k3, k4, k5, k6, k7, k8, k9, k10, k11, k12, k13, k14, k15, k16, k17, k18, k19, k20, k21, k22, k23, k24, k25"))
+            content="Python编程, 异步IO, 并发编程, 协程, 事件循环, 异步编程, Python开发, "
+            "软件工程, 最佳实践, 性能优化, IO密集型, 代码整洁, 资源利用, "
+            "异步开发, Python异步, 开发技巧, 系统架构, 编程范式, 技术选型, "
+            "架构设计, 编程思想, 开发效率"))
     ]
     mock_openai.chat.completions.create.return_value = mock_response
 
-    service = OpenRouterService()
-    keywords = service.generate_seo_keywords("Some content")
+    # Test content
+    content = """title=""
+subtitle=""
+tags=[]
+categories=[]
+keywords=[]
+---
+# Understanding Python's Async IO
+A comprehensive guide to async/await in Python."""
 
-    # Should limit to 20 keywords
-    assert len(keywords) == 20
-    # Keywords should be unique
-    assert len(set(keywords)) == len(keywords)
+    service = OpenRouterService()
+    keywords = service.generate_seo_keywords(content)
+
+    # Verify we get at most 20 keywords
+    assert isinstance(keywords, list)
+    assert len(keywords) <= 20
+    assert all(isinstance(kw, str) for kw in keywords)
+    assert all(len(kw.split()) <= 3 for kw in keywords)

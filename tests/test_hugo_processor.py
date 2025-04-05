@@ -767,3 +767,95 @@ def test_update_image_references_preserves_unmapped(tmp_path):
 <img src="path/to/unmapped.png" alt="Another Unmapped">
 """
     assert updated_content == expected
+
+
+def test_publish_with_unwritable_hugo_target_home(tmp_path):
+    """Test publishing fails when HUGO_TARGET_HOME directory is not writable."""
+    # Arrange
+    hugo_home = tmp_path / "hugo"
+    hugo_home.mkdir()
+    os.chmod(hugo_home, 0o444)  # Make directory read-only
+
+    os.environ["HUGO_TARGET_HOME"] = str(hugo_home)
+    processor = HugoProcessor({
+        'source_dir': '/path/to/source',
+        'target_dir': '/path/to/target',
+        'image_dir': '/path/to/images'
+    })
+
+    # Act & Assert
+    with pytest.raises(ValueError) as exc_info:
+        processor.publish()
+    assert "HUGO_TARGET_HOME directory is not writable" in str(exc_info.value)
+
+    # Cleanup
+    os.chmod(hugo_home, 0o755)  # Restore permissions for cleanup
+
+
+def test_publish_creates_required_directories():
+    """Test that publish creates required Hugo directories if they don't exist."""
+    # Arrange
+    with tempfile.TemporaryDirectory() as hugo_home:
+        os.environ["HUGO_TARGET_HOME"] = hugo_home
+        processor = HugoProcessor({
+            'source_dir': '/path/to/source',
+            'target_dir': '/path/to/target',
+            'image_dir': '/path/to/images'
+        })
+
+        # Act
+        result = processor.validate_hugo_environment()
+
+        # Assert
+        blog_dir = Path(hugo_home) / "content" / "blog"
+        img_dir = Path(hugo_home) / "static" / "img" / "blog"
+
+        assert blog_dir.exists(), "Blog directory was not created"
+        assert img_dir.exists(), "Image directory was not created"
+        assert result is True, "Validation should return True when successful"
+
+
+def test_publish_with_partial_directory_structure():
+    """Test publishing with partially existing Hugo directory structure."""
+    # Arrange
+    with tempfile.TemporaryDirectory() as hugo_home:
+        # Create only the content directory
+        content_dir = Path(hugo_home) / "content"
+        content_dir.mkdir()
+
+        os.environ["HUGO_TARGET_HOME"] = hugo_home
+        processor = HugoProcessor({
+            'source_dir': '/path/to/source',
+            'target_dir': '/path/to/target',
+            'image_dir': '/path/to/images'
+        })
+
+        # Act
+        result = processor.validate_hugo_environment()
+
+        # Assert
+        blog_dir = Path(hugo_home) / "content" / "blog"
+        img_dir = Path(hugo_home) / "static" / "img" / "blog"
+
+        assert blog_dir.exists(), "Blog directory was not created"
+        assert img_dir.exists(), "Image directory was not created"
+        assert result is True, "Validation should return True when successful"
+
+
+def test_validate_hugo_environment_returns_false_on_error():
+    """Test that validate_hugo_environment returns False when validation fails."""
+    # Arrange
+    if "HUGO_TARGET_HOME" in os.environ:
+        del os.environ["HUGO_TARGET_HOME"]
+
+    processor = HugoProcessor({
+        'source_dir': '/path/to/source',
+        'target_dir': '/path/to/target',
+        'image_dir': '/path/to/images'
+    })
+
+    # Act
+    result = processor.validate_hugo_environment()
+
+    # Assert
+    assert result is False, "Validation should return False when HUGO_TARGET_HOME is not set"
