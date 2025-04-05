@@ -162,15 +162,36 @@
 
 ## Testing Status
 - Overall Status:
-  - Total Tests: 137
-  - Passed: 136
-  - Skipped: 1 (Integration tests requiring WeChat API)
-  - Overall Coverage: 77%
+  - Total Tests: 148
+  - Passed: 146
+  - Skipped: 2 (WeChat upload integration tests)
+  - Overall Coverage: 78%
 
 - Module Coverage:
   - `empty_line_processor.py`: 100% ✅
   - `hugo_front_matter.py`: 95% ✅
   - `image_reference.py`: 95% ✅
   - `image_errors.py`: 99% ✅
+  - `image_processor.py`: 95% ✅
   - `wx_htmler.py`: 96% ✅
+  - `error_handler.py`: 88% ✅
+  - `openrouter_service.py`: 89% ✅
   - `hugo_processor.py`: 77% 🚧
+  - `md_file.py`: 80% 🚧
+  - `wx_publisher.py`: 79% 🚧
+  - `wx_cache.py`: 73% 🚧
+  - `wx_client.py`: 26% ❌
+  - `cli.py`: 16% ❌
+
+## Recently Fixed Issues
+### Empty Line Processing
+- Fixed empty line handling in `empty_line_processor.py`
+- Updated documentation to clarify newline requirements
+- Modified test cases to handle flexible newline endings
+- Improved test coverage to 100%
+- All tests passing after modifications
+
+### Document Updates
+- Updated instruction.md with clarified empty line rules
+- Updated Documentation.md with flexible newline requirements
+- Synchronized documentation with implementation

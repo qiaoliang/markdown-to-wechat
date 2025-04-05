@@ -141,10 +141,10 @@ wx/
 - Coverage tracking: pytest-cov
 - Mock support: pytest-mock
 - Current test status:
-  - Total tests: 133
-  - Passed: 126
-  - Skipped: 7 (Integration tests)
-  - Overall coverage: 77%
+  - Total tests: 148
+  - Passed: 146
+  - Skipped: 2 (WeChat upload integration tests)
+  - Overall coverage: 78%
 
 ## API Documentation
 ### Hugo Operations
@@ -155,7 +155,7 @@ wx/
      - Remove multiple consecutive empty lines
      - Preserve semantic structure
      - Maintain Markdown standard compliance
-     - Always end files with newline
+     - Files can optionally end with or without a newline character (`\n`)
      - Handle empty files properly
    - Special cases:
      - Code blocks: preserve all empty lines
