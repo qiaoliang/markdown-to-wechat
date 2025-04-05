@@ -60,7 +60,7 @@ class OpenRouterService:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a title generator. Generate ONLY a title, no other text. The title must be in English, under 100 characters, and describe the main topic. Do not include any markdown, quotes, or additional formatting."
+                    "content": "你是一个标题生成器。只生成标题，不要其他文本。标题必须是中文，不超过100个字符，并描述主要主题。不要包含任何markdown、引号或额外的格式。"
                 },
                 {
                     "role": "user",
@@ -129,7 +129,7 @@ class OpenRouterService:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a subtitle generator. Generate ONLY a single sentence description (max 50 characters) that captures the essence of the article. The description must be in English, end with a period, and should not include any markdown, quotes, or additional formatting."
+                    "content": "你是一个副标题生成器。生成一个单句描述（最多50个字符），捕捉文章的精髓。描述必须是中文，以句号结尾，不应包含任何markdown、引号或额外的格式。"
                 },
                 {
                     "role": "user",
@@ -153,254 +153,109 @@ class OpenRouterService:
                     .replace("\n", " ")  # Replace newlines with spaces
                     .strip())
 
-        # Ensure subtitle ends with proper punctuation
-        if subtitle and subtitle[-1] not in '.!?':
-            subtitle = subtitle + '.'
+        # Remove any existing periods or ellipsis
+        subtitle = subtitle.rstrip('。.…')
 
-        # If subtitle is too long after adding punctuation, truncate it and add ellipsis
-        if len(subtitle) > 50:
-            subtitle = subtitle[:46] + "..."
-
-        # If subtitle is empty, use the first non-empty line from the content
-        if not subtitle and clean_lines:
-            first_line = clean_lines[0]
-            if len(first_line) > 46:
-                subtitle = first_line[:46] + "..."
-            else:
-                subtitle = first_line + "."
-
-        return subtitle
+        # Process the subtitle
+        if len(subtitle) > 46:
+            # For long subtitles, truncate and add ellipsis
+            # Remove any trailing punctuation
+            subtitle = subtitle[:46].rstrip(',.。!?！？、，')
+            return subtitle + "..."
+        else:
+            # For short subtitles, add period
+            return subtitle + "。"
 
     def generate_tags(self, content: str) -> List[str]:
-        """Generate three relevant tags from the article content.
+        """
+        Generate exactly three tags for the article content.
 
         Args:
-            content: The full article content including front matter
+            content: The article content to analyze
 
         Returns:
-            A list of three tags that best represent the article's topics
+            List of exactly three tags
         """
-        # Extract content without front matter
-        content_without_front_matter = content.split(
-            "---", 1)[1] if "---" in content else content
-
-        # Clean up the content
-        content_lines = content_without_front_matter.strip().split("\n")
-        # Remove empty lines and clean up markdown headers
-        clean_lines = []
-        for line in content_lines:
-            line = line.strip()
-            if not line:
-                continue
-            # Remove markdown header markers but preserve the text
-            if line.startswith('#'):
-                line = line.lstrip('#').strip()
-            clean_lines.append(line)
-
-        # Take first three paragraphs for context
-        clean_content = " ".join(clean_lines[:15])
-
-        response = self.client.chat.completions.create(
-            model="deepseek/deepseek-v3-base:free",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a tag generator. Generate EXACTLY three relevant tags that best represent the article's topics. Return ONLY the tags in a comma-separated format. Each tag should be a single word or short phrase (2-3 words max). The tags should be specific, relevant, and helpful for categorization."
-                },
-                {
-                    "role": "user",
-                    "content": clean_content
-                }
-            ],
-            temperature=0.3,  # Lower temperature for more focused output
-            max_tokens=20,    # Limit response length
-            top_p=0.8,       # More focused token selection
-            frequency_penalty=0.0  # No need for frequency penalty in tags
+        prompt = (
+            "你是一个标签生成器。根据下面的文章内容，生成恰好三个最能代表文章主题的标签。"
+            "每个标签应该：\n"
+            "1. 是单个词或带连字符的词\n"
+            "2. 只包含字母、数字和连字符\n"
+            "3. 与内容相关\n"
+            "4. 简洁明了\n\n"
+            "内容：\n"
+            f"{content}\n\n"
+            "只回复三个标签，每行一个，不要标点或解释。标签应该是拼音形式，例如：python-web。"
         )
 
-        tags_text = response.choices[0].message.content.strip()
+        response = self._get_response_with_retry(prompt)
+        tags = [tag.strip() for tag in response.split('\n') if tag.strip()][:3]
 
-        # Split the comma-separated tags and clean them
-        raw_tags = [tag.strip() for tag in tags_text.split(',')]
-
-        # Clean and format each tag
-        tags = []
-        for tag in raw_tags:
-            # Remove any quotes or special characters
-            clean_tag = (tag
-                         .replace('"', '')
-                         .replace("'", "")
-                         .replace("[", "")
-                         .replace("]", "")
-                         .strip())
-            # Replace spaces with hyphens and ensure only allowed characters
-            clean_tag = "-".join(word.strip() for word in clean_tag.split())
-            # Remove any consecutive hyphens
-            while "--" in clean_tag:
-                clean_tag = clean_tag.replace("--", "-")
+        # Clean up tags
+        cleaned_tags = []
+        for tag in tags:
+            # Remove any non-alphanumeric characters except hyphens
+            cleaned = ''.join(c for c in tag if c.isalnum() or c == '-')
+            # Remove consecutive hyphens
+            while '--' in cleaned:
+                cleaned = cleaned.replace('--', '-')
             # Remove leading/trailing hyphens
-            clean_tag = clean_tag.strip("-")
-            if clean_tag:
-                tags.append(clean_tag)
+            cleaned = cleaned.strip('-')
+            # Convert to lowercase
+            cleaned = cleaned.lower()
+            if cleaned:
+                cleaned_tags.append(cleaned)
 
-        # If we have too many tags, keep only the first 3
-        if len(tags) > 3:
-            tags = tags[:3]
+        # If we don't have enough tags, add generic ones
+        while len(cleaned_tags) < 3:
+            cleaned_tags.append(f"tag-{len(cleaned_tags)+1}")
 
-        # If we don't have enough tags, extract from content
-        if len(tags) < 3:
-            # First, try to use the first header as a tag
-            if clean_lines:
-                header_tag = "-".join(word.strip()
-                                      for word in clean_lines[0].split())
-                if header_tag and header_tag not in tags:
-                    tags.append(header_tag)
-
-            # Then, look for key terms in the content
-            content_text = " ".join(clean_lines).lower()
-            key_terms = ["programming", "development", "software", "python",
-                         "javascript", "web", "api", "data", "cloud", "security"]
-
-            # First, try to find exact matches
-            for term in key_terms:
-                if len(tags) >= 3:
-                    break
-                if term in content_text and term not in tags:
-                    tags.append(term)
-
-            # If we still need more tags, look for partial matches
-            if len(tags) < 3:
-                for line in clean_lines:
-                    if len(tags) >= 3:
-                        break
-                    words = line.lower().split()
-                    for term in key_terms:
-                        if len(tags) >= 3:
-                            break
-                        if any(term in word for word in words) and term not in tags:
-                            tags.append(term)
-
-            # If we still need more tags, add generic ones
-            while len(tags) < 3:
-                generic_tag = f"topic-{len(tags) + 1}"
-                if generic_tag not in tags:
-                    tags.append(generic_tag)
-
-        return tags
+        return cleaned_tags[:3]  # Ensure we return exactly 3 tags
 
     def suggest_category(self, content: str, existing_categories: List[str] = None) -> str:
-        """Generate a category suggestion for the article content.
+        """
+        Suggest a category for the article content.
 
         Args:
-            content: The full article content including front matter
-            existing_categories: Optional list of existing categories to check against max limit
+            content: The article content to analyze
+            existing_categories: Optional list of existing categories to choose from
 
         Returns:
-            A suggested category that best represents the article's topic
+            A suggested category name
         """
-        # Handle empty content
-        if not content:
-            return "Personal Opinion"
-
         # Define predefined categories
-        PREDEFINED_CATEGORIES = [
-            "Personal Opinion", "Practical Summary", "Methodology",
-            "AI Programming", "Software Engineering", "Engineering Efficiency",
-            "Artificial Intelligence"
+        predefined = [
+            "个人观点", "实用总结", "方法论",
+            "AI编程", "软件工程", "工程效率",
+            "人工智能"
         ]
 
-        # If we have max categories (10), only use existing ones
+        # If we have maximum categories, only use existing ones
         if existing_categories and len(existing_categories) >= 10:
-            # Extract content without front matter
-            content_without_front_matter = content.split(
-                "---", 1)[1] if "---" in content else content
-
-            # Clean up the content
-            content_lines = content_without_front_matter.strip().split("\n")
-            clean_lines = []
-            for line in content_lines:
-                line = line.strip()
-                if not line:
-                    continue
-                # Remove markdown header markers but preserve the text
-                if line.startswith('#'):
-                    line = line.lstrip('#').strip()
-                clean_lines.append(line)
-
-            # Take first paragraph for context
-            clean_content = " ".join(clean_lines[:5])
-
-            response = self.client.chat.completions.create(
-                model="deepseek/deepseek-v3-base:free",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": f"You are a category suggester. Given the article content, suggest the most appropriate category from this list: {', '.join(existing_categories)}. Return ONLY the category name, no other text."
-                    },
-                    {
-                        "role": "user",
-                        "content": clean_content
-                    }
-                ],
-                temperature=0.3,  # Lower temperature for more focused output
-                max_tokens=10,    # Category names are short
-                top_p=0.8        # More focused token selection
+            return self._get_response_with_retry(
+                "你是一个内容分类器。根据下面的文章内容，从以下列表中选择一个最合适的分类：\n"
+                f"{', '.join(existing_categories)}\n\n"
+                "内容：\n"
+                f"{content}\n\n"
+                "只回复分类名称，不要解释。"
             )
 
-            suggested_category = response.choices[0].message.content.strip()
-            # Ensure we return a valid existing category
-            return suggested_category if suggested_category in existing_categories else existing_categories[0]
-
-        # For normal case (less than 10 categories), we can suggest new ones
-        # Extract content without front matter
-        content_without_front_matter = content.split(
-            "---", 1)[1] if "---" in content else content
-
-        # Clean up the content
-        content_lines = content_without_front_matter.strip().split("\n")
-        clean_lines = []
-        for line in content_lines:
-            line = line.strip()
-            if not line:
-                continue
-            # Remove markdown header markers but preserve the text
-            if line.startswith('#'):
-                line = line.lstrip('#').strip()
-            clean_lines.append(line)
-
-        # Take first paragraph for context
-        clean_content = " ".join(clean_lines[:5])
-
-        response = self.client.chat.completions.create(
-            model="deepseek/deepseek-v3-base:free",
-            messages=[
-                {
-                    "role": "system",
-                    "content": f"You are a category suggester. Given the article content, suggest the most appropriate category. Prefer these predefined categories if they fit: {', '.join(PREDEFINED_CATEGORIES)}. If none fit well, suggest a new concise category (1-3 words). Return ONLY the category name, no other text."
-                },
-                {
-                    "role": "user",
-                    "content": clean_content
-                }
-            ],
-            temperature=0.3,  # Lower temperature for more focused output
-            max_tokens=10,    # Category names are short
-            top_p=0.8        # More focused token selection
+        # Otherwise, try to use predefined categories first
+        category = self._get_response_with_retry(
+            "你是一个内容分类器。根据下面的文章内容，从以下列表中选择一个最合适的分类：\n"
+            f"{', '.join(predefined)}\n\n"
+            "内容：\n"
+            f"{content}\n\n"
+            "如果没有合适的分类，建议一个新的分类名称（最多3个词）。只回复分类名称，"
+            "不要解释或标点。"
         )
 
-        category = response.choices[0].message.content.strip()
-
-        # Clean up the category
-        category = (category
-                    .replace('"', '')
-                    .replace("'", "")
-                    .replace("[", "")
-                    .replace("]", "")
-                    .strip())
-
-        # Ensure we have a valid category
-        if not category:
-            return "Personal Opinion"
+        # Clean up the response
+        category = category.strip(' .:')  # Remove dots, colons, and spaces
+        words = category.split()
+        if len(words) > 3:
+            # If the category is too long, try to extract key words or use the first three words
+            category = ' '.join(words[:3])
 
         return category
 
@@ -441,7 +296,7 @@ class OpenRouterService:
             messages=[
                 {
                     "role": "system",
-                    "content": "Generate SEO keywords for the given article content. Return up to 20 relevant keywords or key phrases. Each keyword/phrase should be 1-3 words long. Return ONLY the keywords in a comma-separated format. Focus on terms that would be valuable for search engine optimization."
+                    "content": "为给定的文章内容生成SEO关键词。返回最多20个相关的关键词或关键短语。每个关键词/短语应该是1-3个词长。只返回逗号分隔的关键词。关注对搜索引擎优化有价值的中文术语。"
                 },
                 {
                     "role": "user",
@@ -487,3 +342,38 @@ class OpenRouterService:
                 break
 
         return keywords
+
+    def _get_response_with_retry(self, prompt: str, max_retries: int = 3) -> str:
+        """
+        Get response from OpenRouter API with retry mechanism.
+
+        Args:
+            prompt: The prompt to send to the API
+            max_retries: Maximum number of retry attempts
+
+        Returns:
+            The response text from the API
+
+        Raises:
+            RuntimeError: If all retry attempts fail
+        """
+        for attempt in range(max_retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model="deepseek/deepseek-v3-base:free",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    temperature=0.3,  # Lower temperature for more focused output
+                    max_tokens=50,    # Keep responses concise
+                    top_p=0.8        # More focused token selection
+                )
+                return response.choices[0].message.content.strip()
+            except Exception as e:
+                if attempt == max_retries - 1:  # Last attempt
+                    raise RuntimeError(
+                        f"Failed to get response after {max_retries} attempts: {str(e)}")
+                continue  # Try again
