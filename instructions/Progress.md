@@ -120,7 +120,7 @@
 - Overall Status:
   - Total Tests: 137
   - Passed: 135
-  - Skipped: 2 (Integration tests requiring API keys)
+  - Skipped: 2 (Integration tests requiring WeChat API)
   - Overall Coverage: 77%
 
 - Module Coverage:
@@ -132,7 +132,7 @@
   - `error_handler.py`: 88% ✅
   - `hugo_processor.py`: 77% 🚧
   - `openrouter_service.py`: 79% ✅
-  - `wx_publisher.py`: 79% 🚧
+  - `wx_publisher.py`: 79% ✅
   - `md_file.py`: 80% 🚧
   - `wx_cache.py`: 73% 🚧
   - `wx_client.py`: 26% ❌
@@ -157,3 +157,6 @@
 - OpenRouter Integration: ✅ Complete
 - User Guide: 🚧 In Progress
 - Integration Guide: 📋 Pending
+- WeChat Integration: ✅ Complete
+  - Unit tests with mocked client: ✅ Complete
+  - Integration tests marked as skipped: ✅ Complete
