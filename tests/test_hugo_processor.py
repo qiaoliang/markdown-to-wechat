@@ -4,6 +4,7 @@ import pytest
 from pathlib import Path
 from typing import Dict, Any
 from tempfile import NamedTemporaryFile
+from unittest.mock import patch
 
 from wx.hugo_processor import HugoProcessor, FormatViolation
 
@@ -859,3 +860,366 @@ def test_validate_hugo_environment_returns_false_on_error():
 
     # Assert
     assert result is False, "Validation should return False when HUGO_TARGET_HOME is not set"
+
+
+def test_copy_article_images(tmp_path):
+    """Test copying article images to Hugo static directory.
+
+    This test verifies:
+    1. Images are correctly copied to the target directory
+    2. Existing images are overwritten
+    3. Directory structure is created if not exists
+    """
+    # Create test directory structure
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    images_dir = source_dir / "images"
+    images_dir.mkdir()
+
+    # Create test images
+    test_image1 = images_dir / "test1.jpg"
+    test_image1.write_bytes(b"test1 content")
+    test_image2 = images_dir / "test2.png"
+    test_image2.write_bytes(b"test2 content")
+
+    # Create test markdown file with image references
+    md_content = """+++
+title="Test Article"
++++
+# Test Article
+
+![Test Image 1](images/test1.jpg)
+![Test Image 2](images/test2.png)
+"""
+    md_file = source_dir / "test.md"
+    md_file.write_text(md_content)
+
+    # Set up Hugo target directory
+    hugo_home = tmp_path / "hugo"
+    hugo_home.mkdir()
+    os.environ["HUGO_TARGET_HOME"] = str(hugo_home)
+
+    # Initialize HugoProcessor
+    processor = HugoProcessor({
+        'source_dir': str(source_dir),
+        'target_dir': str(hugo_home / "content" / "blog"),
+        'image_dir': str(hugo_home / "static" / "img" / "blog")
+    })
+
+    # Create a file to be overwritten
+    img_target_dir = hugo_home / "static" / "img" / "blog"
+    img_target_dir.mkdir(parents=True)
+    existing_image = img_target_dir / "test1.jpg"
+    existing_image.write_bytes(b"old content")
+
+    # Test image copying
+    processor.copy_article_images(str(md_file))
+
+    # Verify images were copied correctly
+    copied_image1 = img_target_dir / "test1.jpg"
+    copied_image2 = img_target_dir / "test2.png"
+
+    assert copied_image1.exists(), "First image should be copied"
+    assert copied_image2.exists(), "Second image should be copied"
+    assert copied_image1.read_bytes() == b"test1 content", "First image should be overwritten"
+    assert copied_image2.read_bytes() == b"test2 content", "Second image content should match"
+
+
+def test_publish_result_notification(tmp_path):
+    """Test that publish operation provides proper result notification"""
+    # 创建测试目录结构
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    target_dir = tmp_path / "hugo_target"
+    target_dir.mkdir()
+    (target_dir / "content" / "blog").mkdir(parents=True)
+    (target_dir / "static" / "img" / "blog").mkdir(parents=True)
+
+    # 创建测试文件
+    md_content = """+++
+title="Test Article"
+author="Test Author"
++++
+
+# Test Article
+![image1](images/test1.jpg)
+![image2](images/test2.png)
+"""
+    md_file = source_dir / "test.md"
+    md_file.write_text(md_content)
+
+    # 创建图片目录和测试图片
+    image_dir = source_dir / "images"
+    image_dir.mkdir()
+    (image_dir / "test1.jpg").write_bytes(b"fake jpg")
+    (image_dir / "test2.png").write_bytes(b"fake png")
+
+    # 设置环境变量和配置
+    config = {
+        'source_dir': str(source_dir),
+        'target_dir': str(target_dir / "content" / "blog"),
+        'image_dir': str(target_dir / "static" / "img" / "blog")
+    }
+
+    with patch.dict(os.environ, {'HUGO_TARGET_HOME': str(target_dir)}):
+        processor = HugoProcessor(config)
+        result = processor.publish([str(md_file)])
+
+        # 验证结果格式
+        assert isinstance(result, dict)
+        assert "processed_files" in result
+        assert "errors" in result
+
+        # 验证处理的文件列表
+        processed_files = result["processed_files"]
+        assert len(processed_files) == 3  # 1 markdown + 2 images
+        assert any(str(md_file) in f for f in processed_files)
+        assert any("test1.jpg" in f for f in processed_files)
+        assert any("test2.png" in f for f in processed_files)
+
+        # 验证错误列表
+        assert isinstance(result["errors"], list)
+        assert len(result["errors"]) == 0  # 这个测试场景中应该没有错误
+
+
+def test_publish_result_notification_with_errors(tmp_path):
+    """Test that publish operation properly reports errors in the result"""
+    # 创建测试目录结构
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    target_dir = tmp_path / "hugo_target"
+    target_dir.mkdir()
+    (target_dir / "content" / "blog").mkdir(parents=True)
+    (target_dir / "static" / "img" / "blog").mkdir(parents=True)
+
+    # 创建测试文件，引用不存在的图片
+    md_content = """+++
+title="Test Article"
+author="Test Author"
++++
+
+# Test Article
+![missing](images/missing.jpg)
+"""
+    md_file = source_dir / "test.md"
+    md_file.write_text(md_content)
+
+    # 设置环境变量和配置
+    config = {
+        'source_dir': str(source_dir),
+        'target_dir': str(target_dir / "content" / "blog"),
+        'image_dir': str(target_dir / "static" / "img" / "blog")
+    }
+
+    with patch.dict(os.environ, {'HUGO_TARGET_HOME': str(target_dir)}):
+        processor = HugoProcessor(config)
+        result = processor.publish([str(md_file)])
+
+        # 验证结果格式
+        assert isinstance(result, dict)
+        assert "processed_files" in result
+        assert "errors" in result
+
+        # 验证处理的文件列表
+        processed_files = result["processed_files"]
+        assert len(processed_files) == 1  # 只有 markdown 文件被处理
+        assert any(str(md_file) in f for f in processed_files)
+
+        # 验证错误列表
+        assert isinstance(result["errors"], list)
+        assert len(result["errors"]) > 0
+        assert any("missing.jpg" in str(err) for err in result["errors"])
+
+
+def test_validate_document_with_missing_images(tmp_path):
+    # 准备测试目录
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    image_dir = tmp_path / "images"
+    image_dir.mkdir()
+
+    # 创建一个引用了不存在图片的 Markdown 文件
+    md_content = """---
+title="Test Article"
+---
+# Test Article
+
+This is a test article with missing images:
+![missing image](images/missing.jpg)
+![another missing](images/not_found.png)
+"""
+    md_file = source_dir / "test.md"
+    md_file.write_text(md_content)
+
+    # 初始化 HugoProcessor
+    config = {
+        'source_dir': str(source_dir),
+        'target_dir': str(target_dir),
+        'image_dir': str(image_dir)
+    }
+    processor = HugoProcessor(config)
+
+    # 验证文档
+    validation_result = processor.validate_document(str(md_file))
+
+    # 验证结果
+    assert not validation_result.is_valid
+    assert len(validation_result.missing_images) == 2
+    assert "images/missing.jpg" in validation_result.missing_images
+    assert "images/not_found.png" in validation_result.missing_images
+    assert validation_result.error_messages
+    assert "missing images" in validation_result.error_messages[0].lower()
+
+
+def test_validate_document_with_incomplete_front_matter(tmp_path):
+    # 准备测试目录
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    image_dir = tmp_path / "images"
+    image_dir.mkdir()
+
+    # 创建一个缺少必要 front matter 的 Markdown 文件
+    md_content = """---
+description="Test Description"
+---
+# Test Article
+
+This is a test article.
+"""
+    md_file = source_dir / "test.md"
+    md_file.write_text(md_content)
+
+    # 初始化 HugoProcessor
+    config = {
+        'source_dir': str(source_dir),
+        'target_dir': str(target_dir),
+        'image_dir': str(image_dir)
+    }
+    processor = HugoProcessor(config)
+
+    # 验证文档
+    validation_result = processor.validate_document(str(md_file))
+
+    # 验证结果
+    assert not validation_result.is_valid
+    assert len(validation_result.incomplete_front_matter) == 1
+    assert "title" in validation_result.incomplete_front_matter
+    assert validation_result.error_messages
+    assert "missing required front matter" in validation_result.error_messages[0].lower(
+    )
+
+
+def test_validate_document_with_valid_content(tmp_path):
+    # 准备测试目录
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    image_dir = tmp_path / "source/images"  # 修改图片目录位置
+    image_dir.mkdir(parents=True)
+
+    # 创建图片文件
+    (image_dir / "test.jpg").touch()
+
+    # 创建一个有效的 Markdown 文件
+    md_content = """---
+title="Test Article"
+description="Test Description"
+---
+# Test Article
+
+This is a test article with a valid image:
+![test image](images/test.jpg)
+"""
+    md_file = source_dir / "test.md"
+    md_file.write_text(md_content)
+
+    # 初始化 HugoProcessor
+    config = {
+        'source_dir': str(source_dir),
+        'target_dir': str(target_dir),
+        'image_dir': str(image_dir)
+    }
+    processor = HugoProcessor(config)
+
+    # 验证文档
+    validation_result = processor.validate_document(str(md_file))
+
+    # 验证结果
+    assert validation_result.is_valid
+    assert not validation_result.missing_images
+    assert not validation_result.incomplete_front_matter
+    assert not validation_result.error_messages
+
+
+def test_publish_skips_invalid_documents(tmp_path, monkeypatch):
+    # 准备测试目录
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    target_dir = tmp_path / "target"
+    target_dir.mkdir()
+    image_dir = tmp_path / "source/images"
+    image_dir.mkdir(parents=True)
+    hugo_dir = tmp_path / "hugo"
+    hugo_dir.mkdir()
+
+    # 设置 HUGO_TARGET_HOME 环境变量
+    monkeypatch.setenv("HUGO_TARGET_HOME", str(hugo_dir))
+
+    # 创建图片文件
+    (image_dir / "valid.jpg").touch()
+
+    # 创建一个有效的文档
+    valid_content = """---
+title="Valid Article"
+description="Test Description"
+---
+# Valid Article
+
+This is a valid article with an existing image:
+![valid image](images/valid.jpg)
+"""
+    valid_file = source_dir / "valid.md"
+    valid_file.write_text(valid_content)
+
+    # 创建一个无效的文档（缺失图片）
+    invalid_content = """---
+title="Invalid Article"
+description="Test Description"
+---
+# Invalid Article
+
+This article has a missing image:
+![missing image](images/missing.jpg)
+"""
+    invalid_file = source_dir / "invalid.md"
+    invalid_file.write_text(invalid_content)
+
+    # 初始化 HugoProcessor
+    config = {
+        'source_dir': str(source_dir),
+        'target_dir': str(target_dir),
+        'image_dir': str(image_dir)
+    }
+    processor = HugoProcessor(config)
+
+    # 执行发布
+    result = processor.publish([str(valid_file), str(invalid_file)])
+
+    # 验证结果
+    assert len(result["processed_files"]) == 1  # 只处理了有效文档
+    assert str(valid_file) in result["processed_files"]
+    assert len(result["skipped_files"]) == 1  # 跳过了无效文档
+    assert str(invalid_file) in result["skipped_files"]
+    assert any("missing images" in str(err) for err in result["errors"])
+
+    # 验证文件是否正确复制到 Hugo 目录
+    hugo_content_dir = hugo_dir / "content" / "blog"
+    hugo_image_dir = hugo_dir / "static" / "img" / "blog"
+    assert (hugo_content_dir / "valid.md").exists()
+    assert (hugo_image_dir / "valid.jpg").exists()
+    assert not (hugo_content_dir / "invalid.md").exists()

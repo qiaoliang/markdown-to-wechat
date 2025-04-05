@@ -3,10 +3,10 @@ import re
 import json
 import os
 from pathlib import Path
-from typing import Dict, Any, List
-from dataclasses import dataclass
+from typing import Dict, Any, List, Optional
+from dataclasses import dataclass, field
 from .empty_line_processor import EmptyLineProcessor
-from .image_reference import extract_image_references
+from .hugo_image_processor import HugoImageProcessor
 
 
 @dataclass
@@ -15,6 +15,15 @@ class FormatViolation:
     line_number: int
     message: str
     line_content: str = ""
+
+
+@dataclass
+class ValidationResult:
+    """存储文档验证的结果"""
+    is_valid: bool = True
+    missing_images: List[str] = field(default_factory=list)
+    incomplete_front_matter: List[str] = field(default_factory=list)
+    error_messages: List[str] = field(default_factory=list)
 
 
 class HugoProcessor:
@@ -43,6 +52,10 @@ class HugoProcessor:
         self.config = self._validate_config(config)
         self.logger = logging.getLogger(__name__)
         self.empty_line_processor = EmptyLineProcessor()
+        self.image_processor = HugoImageProcessor(
+            self.config['source_dir'],
+            self.config['image_dir']
+        )
 
     def _validate_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -197,9 +210,10 @@ class HugoProcessor:
 
         # Extract front matter
         front_matter_match = re.match(
-            r'^---\n(.*?)\n---\n', content, re.DOTALL)
+            r'^---\s*(.*?)\s*---\s*', content, re.DOTALL)
         if not front_matter_match:
-            raise ValueError("Missing front matter in markdown file")
+            # If no front matter is found, add a minimal one
+            return f"---\ntitle=\"Untitled\"\n---\n{content}"
 
         front_matter = front_matter_match.group(1)
         rest_of_content = content[front_matter_match.end():]
@@ -224,6 +238,10 @@ class HugoProcessor:
                 value = value.strip()
                 value = self._standardize_value(value)
                 processed_lines.append(f'{key}={value}')
+
+        # Ensure title is present
+        if not any(line.startswith('title=') for line in processed_lines):
+            processed_lines.insert(0, 'title="Untitled"')
 
         # Reconstruct the content
         standardized_front_matter = "\n".join(processed_lines)
@@ -293,117 +311,99 @@ class HugoProcessor:
         This includes:
         1. Format standardization
         2. Empty line removal
+        3. Copy to Hugo target directory
 
         Args:
             file_path: Path to the markdown file to process.
         """
-        with open(file_path, 'r', encoding='utf-8') as f:
+        # 读取源文件内容
+        md_file = Path(file_path)
+        with md_file.open('r', encoding='utf-8') as f:
             content = f.read()
 
-        # First standardize the format
+        # 标准化格式
         content = self.standardize_format(content)
 
-        # Then remove unnecessary empty lines
+        # 移除不必要的空行
         content = self.remove_empty_lines(content)
 
-        # Write back to file
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(content)
+        # 获取目标路径
+        source_path = Path(self.config['source_dir'])
+        try:
+            rel_path = md_file.relative_to(source_path)
+        except ValueError:
+            # 如果文件不在源目录下，使用文件名
+            rel_path = md_file.name
 
-    def publish(self) -> Dict[str, Any]:
-        """
-        Publish markdown files to Hugo.
+        # 构建目标路径
+        hugo_home = os.environ.get("HUGO_TARGET_HOME")
+        if not hugo_home:
+            raise ValueError(
+                "HUGO_TARGET_HOME environment variable is not set")
 
-        This includes:
-        1. Checking and creating necessary directories
-        2. Processing markdown files
-        3. Copying and updating image references
+        target_file = Path(hugo_home) / "content" / "blog" / rel_path
+        target_file.parent.mkdir(parents=True, exist_ok=True)
+
+        # 写入目标文件
+        target_file.write_text(content)
+
+    def publish(self, files: List[str] | None = None) -> Dict[str, Any]:
+        """发布 Markdown 文件到 Hugo 目录
+
+        Args:
+            files: 要处理的文件列表，如果为 None 则处理源目录下的所有 Markdown 文件
 
         Returns:
-            Dictionary containing:
-                - success: bool indicating if publishing was successful
-                - errors: list of errors encountered
-
-        Raises:
-            ValueError: If HUGO_TARGET_HOME is not set or points to non-existent directory
+            包含处理结果的字典：
+            - processed_files: 成功处理的文件列表
+            - skipped_files: 跳过的文件列表
+            - errors: 处理过程中的错误列表
         """
         result = {
-            "success": True,
+            "processed_files": [],
+            "skipped_files": [],
             "errors": []
         }
 
         try:
-            # Validate Hugo environment
-            hugo_home = os.environ.get("HUGO_TARGET_HOME")
-            if not hugo_home:
-                raise ValueError(
-                    "HUGO_TARGET_HOME environment variable is not set")
+            # 验证 Hugo 环境
+            if not self.validate_hugo_environment():
+                raise ValueError("Invalid Hugo environment")
 
-            hugo_path = Path(hugo_home)
-            if not hugo_path.exists():
-                raise ValueError(
-                    f"HUGO_TARGET_HOME directory does not exist: {hugo_home}")
+            # 如果没有指定文件，获取所有 Markdown 文件
+            if files is None:
+                files = [str(f) for f in Path(
+                    self.config['source_dir']).glob('**/*.md')]
 
-            # Validate directory is writable
-            try:
-                test_file = hugo_path / ".write_test"
-                test_file.touch()
-                test_file.unlink()
-            except (OSError, PermissionError):
-                raise ValueError("HUGO_TARGET_HOME directory is not writable")
-
-            # Create required directories
-            content_dir = hugo_path / "content" / "blog"
-            image_dir = hugo_path / "static" / "img" / "blog"
-
-            content_dir.mkdir(parents=True, exist_ok=True)
-            image_dir.mkdir(parents=True, exist_ok=True)
-
-            # Process source directory
-            source_path = Path(self.config["source_dir"])
-            if not source_path.exists():
-                raise ValueError(
-                    f"Source directory does not exist: {source_path}")
-
-            # Process all markdown files
-            for md_file in source_path.rglob("*.md"):
+            # 处理每个文件
+            for file_path in files:
                 try:
-                    # Determine relative path from source directory
-                    rel_path = md_file.relative_to(source_path)
-                    target_file = content_dir / rel_path
+                    # 验证文档
+                    validation_result = self.validate_document(file_path)
+                    if not validation_result.is_valid:
+                        result["skipped_files"].append(file_path)
+                        result["errors"].extend(
+                            validation_result.error_messages)
+                        continue
 
-                    # Create target directory if it doesn't exist
-                    target_file.parent.mkdir(parents=True, exist_ok=True)
+                    # 处理有效文档
+                    md_file = Path(file_path)
 
-                    # Process and copy the file
-                    content = md_file.read_text()
+                    # 复制图片文件
+                    self.copy_article_images(str(md_file))
 
-                    # Copy associated images and update references
-                    image_mapping = self.copy_image_files(md_file)
-                    if image_mapping:
-                        content = self.update_image_references(
-                            content, image_mapping)
+                    # 复制并更新 Markdown 文件
+                    self.process_file(str(md_file))
 
-                    # Standardize format and remove empty lines
-                    content = self.standardize_format(content)
-                    content = self.remove_empty_lines(content)
-
-                    # Write the processed content
-                    target_file.write_text(content)
+                    result["processed_files"].append(file_path)
 
                 except Exception as e:
-                    result["errors"].append({
-                        "file": str(md_file),
-                        "error": str(e)
-                    })
-                    result["success"] = False
+                    result["errors"].append(
+                        f"Error processing {file_path}: {str(e)}")
+                    result["skipped_files"].append(file_path)
 
-        except ValueError as ve:
-            # Re-raise ValueError exceptions for environment and directory validation
-            raise ve
         except Exception as e:
-            result["errors"].append(str(e))
-            result["success"] = False
+            result["errors"].append(f"Global error: {str(e)}")
 
         return result
 
@@ -421,7 +421,7 @@ class HugoProcessor:
 
         # Get all image references from the markdown file
         content = md_file.read_text()
-        image_refs = extract_image_references(content)
+        image_refs = self.image_processor.extract_image_references(content)
         if not image_refs:
             return image_mapping
 
@@ -501,30 +501,7 @@ class HugoProcessor:
         Returns:
             Updated content with new image paths
         """
-        # Update Markdown image references
-        for old_path, new_path in path_mapping.items():
-            # Escape special characters in the old path for regex
-            escaped_old_path = re.escape(old_path)
-            # Update Markdown format: ![alt](path)
-            content = re.sub(
-                f'!\\[([^\\]]*)\\]\\({escaped_old_path}\\)',
-                f'![\\1]({new_path})',
-                content
-            )
-            # Update HTML format with double quotes: <img src="path" ...>
-            content = re.sub(
-                f'<img([^>]*?)src="{escaped_old_path}"([^>]*?)>',
-                f'<img\\1src="{new_path}"\\2>',
-                content
-            )
-            # Update HTML format with single quotes: <img src='path' ...>
-            content = re.sub(
-                f"<img([^>]*?)src='{escaped_old_path}'([^>]*?)>",
-                f"<img\\1src='{new_path}'\\2>",
-                content
-            )
-
-        return content
+        return self.image_processor.update_image_references(content, path_mapping)
 
     def process_directory(self, directory: str) -> Dict[str, Any]:
         """
@@ -577,5 +554,94 @@ class HugoProcessor:
                 "error": str(e)
             })
             result["success"] = False
+
+        return result
+
+    def copy_article_images(self, md_file: str) -> None:
+        """
+        Copy images referenced in a markdown file to the Hugo static directory.
+        If target images already exist, they will be overwritten.
+
+        Args:
+            md_file: Path to the markdown file
+        """
+        self.image_processor.copy_article_images(md_file)
+
+    def validate_document(self, file_path: str) -> ValidationResult:
+        """验证单个 Markdown 文档的格式
+
+        Args:
+            file_path: Markdown 文件路径
+
+        Returns:
+            ValidationResult: 包含验证结果的对象
+        """
+        result = ValidationResult()
+
+        try:
+            content = Path(file_path).read_text()
+
+            # 检查图片引用
+            image_refs = self.image_processor.extract_image_references(content)
+            for ref in image_refs:
+                img_path = Path(file_path).parent / ref.path
+                if not img_path.exists():
+                    result.missing_images.append(ref.path)
+
+            if result.missing_images:
+                result.is_valid = False
+                result.error_messages.append(
+                    f"Document contains missing images: {', '.join(result.missing_images)}")
+
+            # 检查 front matter
+            required_front_matter = ['title']  # 可以根据需要添加更多必需字段
+
+            # 提取 front matter
+            if content.startswith(self.FRONT_MATTER_START):
+                lines = content.splitlines()
+                front_matter_end = -1
+                for i, line in enumerate(lines[1:], 1):
+                    if line == self.FRONT_MATTER_START:
+                        front_matter_end = i
+                        break
+
+                if front_matter_end != -1:
+                    front_matter_lines = lines[1:front_matter_end]
+                    found_keys = set()
+
+                    for line in front_matter_lines:
+                        line = line.strip()
+                        if not line:
+                            continue
+
+                        # 检查两种格式
+                        key_value_match = self.KEY_VALUE_PATTERN.match(line)
+                        key_colon_match = self.KEY_COLON_PATTERN.match(line)
+
+                        if key_value_match:
+                            found_keys.add(key_value_match.group(1))
+                        elif key_colon_match:
+                            found_keys.add(key_colon_match.group(1))
+
+                    # 检查必需字段
+                    missing_keys = [
+                        key for key in required_front_matter if key not in found_keys]
+                    if missing_keys:
+                        result.is_valid = False
+                        result.incomplete_front_matter.extend(missing_keys)
+                        result.error_messages.append(
+                            f"Missing required front matter fields: {', '.join(missing_keys)}")
+                else:
+                    result.is_valid = False
+                    result.error_messages.append(
+                        "Invalid front matter: missing closing '---'")
+            else:
+                result.is_valid = False
+                result.error_messages.append("Missing front matter")
+
+        except Exception as e:
+            result.is_valid = False
+            result.error_messages.append(
+                f"Error validating document: {str(e)}")
 
         return result
