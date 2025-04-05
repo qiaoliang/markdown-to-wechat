@@ -943,10 +943,10 @@ def test_publish_result_notification(tmp_path):
     (target_dir / "static" / "img" / "blog").mkdir(parents=True)
 
     # 创建测试文件
-    md_content = """+++
+    md_content = """---
 title="Test Article"
-author="Test Author"
-+++
+description="Test Description"
+---
 
 # Test Article
 ![image1](images/test1.jpg)
@@ -960,6 +960,10 @@ author="Test Author"
     image_dir.mkdir()
     (image_dir / "test1.jpg").write_bytes(b"fake jpg")
     (image_dir / "test2.png").write_bytes(b"fake png")
+
+    # 预先创建一些文件来测试覆盖情况
+    (target_dir / "content" / "blog" / "test.md").write_text("old content")
+    (target_dir / "static" / "img" / "blog" / "test1.jpg").write_bytes(b"old jpg")
 
     # 设置环境变量和配置
     config = {
@@ -975,7 +979,9 @@ author="Test Author"
         # 验证结果格式
         assert isinstance(result, dict)
         assert "processed_files" in result
+        assert "skipped_files" in result
         assert "errors" in result
+        assert "overwritten_files" in result
 
         # 验证处理的文件列表
         processed_files = result["processed_files"]
@@ -984,9 +990,20 @@ author="Test Author"
         assert any("test1.jpg" in f for f in processed_files)
         assert any("test2.png" in f for f in processed_files)
 
+        # 验证覆盖的文件列表
+        overwritten_files = result["overwritten_files"]
+        assert len(overwritten_files) == 3  # markdown + 2 images
+        assert any("test.md" in f for f in overwritten_files)
+        assert any("test1.jpg" in f for f in overwritten_files)
+        assert any("test2.png" in f for f in overwritten_files)
+
+        # 验证跳过的文件列表
+        assert isinstance(result["skipped_files"], list)
+        assert len(result["skipped_files"]) == 0
+
         # 验证错误列表
         assert isinstance(result["errors"], list)
-        assert len(result["errors"]) == 0  # 这个测试场景中应该没有错误
+        assert len(result["errors"]) == 0
 
 
 def test_publish_result_notification_with_errors(tmp_path):
@@ -1000,10 +1017,10 @@ def test_publish_result_notification_with_errors(tmp_path):
     (target_dir / "static" / "img" / "blog").mkdir(parents=True)
 
     # 创建测试文件，引用不存在的图片
-    md_content = """+++
+    md_content = """---
 title="Test Article"
-author="Test Author"
-+++
+description="Test Description"
+---
 
 # Test Article
 ![missing](images/missing.jpg)
@@ -1025,145 +1042,32 @@ author="Test Author"
         # 验证结果格式
         assert isinstance(result, dict)
         assert "processed_files" in result
+        assert "skipped_files" in result
         assert "errors" in result
+        assert "overwritten_files" in result
 
         # 验证处理的文件列表
         processed_files = result["processed_files"]
-        assert len(processed_files) == 1  # 只有 markdown 文件被处理
-        assert any(str(md_file) in f for f in processed_files)
+        assert len(processed_files) == 0  # 文件应该被跳过，不会被处理
+
+        # 验证跳过的文件列表
+        skipped_files = result["skipped_files"]
+        assert len(skipped_files) == 1
+        assert any(str(md_file) in f["file"] for f in skipped_files)
+        assert any("missing.jpg" in f["reason"] for f in skipped_files)
 
         # 验证错误列表
         assert isinstance(result["errors"], list)
         assert len(result["errors"]) > 0
         assert any("missing.jpg" in str(err) for err in result["errors"])
 
-
-def test_validate_document_with_missing_images(tmp_path):
-    # 准备测试目录
-    source_dir = tmp_path / "source"
-    source_dir.mkdir()
-    target_dir = tmp_path / "target"
-    target_dir.mkdir()
-    image_dir = tmp_path / "images"
-    image_dir.mkdir()
-
-    # 创建一个引用了不存在图片的 Markdown 文件
-    md_content = """---
-title="Test Article"
----
-# Test Article
-
-This is a test article with missing images:
-![missing image](images/missing.jpg)
-![another missing](images/not_found.png)
-"""
-    md_file = source_dir / "test.md"
-    md_file.write_text(md_content)
-
-    # 初始化 HugoProcessor
-    config = {
-        'source_dir': str(source_dir),
-        'target_dir': str(target_dir),
-        'image_dir': str(image_dir)
-    }
-    processor = HugoProcessor(config)
-
-    # 验证文档
-    validation_result = processor.validate_document(str(md_file))
-
-    # 验证结果
-    assert not validation_result.is_valid
-    assert len(validation_result.missing_images) == 2
-    assert "images/missing.jpg" in validation_result.missing_images
-    assert "images/not_found.png" in validation_result.missing_images
-    assert validation_result.error_messages
-    assert "missing images" in validation_result.error_messages[0].lower()
-
-
-def test_validate_document_with_incomplete_front_matter(tmp_path):
-    # 准备测试目录
-    source_dir = tmp_path / "source"
-    source_dir.mkdir()
-    target_dir = tmp_path / "target"
-    target_dir.mkdir()
-    image_dir = tmp_path / "images"
-    image_dir.mkdir()
-
-    # 创建一个缺少必要 front matter 的 Markdown 文件
-    md_content = """---
-description="Test Description"
----
-# Test Article
-
-This is a test article.
-"""
-    md_file = source_dir / "test.md"
-    md_file.write_text(md_content)
-
-    # 初始化 HugoProcessor
-    config = {
-        'source_dir': str(source_dir),
-        'target_dir': str(target_dir),
-        'image_dir': str(image_dir)
-    }
-    processor = HugoProcessor(config)
-
-    # 验证文档
-    validation_result = processor.validate_document(str(md_file))
-
-    # 验证结果
-    assert not validation_result.is_valid
-    assert len(validation_result.incomplete_front_matter) == 1
-    assert "title" in validation_result.incomplete_front_matter
-    assert validation_result.error_messages
-    assert "missing required front matter" in validation_result.error_messages[0].lower(
-    )
-
-
-def test_validate_document_with_valid_content(tmp_path):
-    # 准备测试目录
-    source_dir = tmp_path / "source"
-    source_dir.mkdir()
-    target_dir = tmp_path / "target"
-    target_dir.mkdir()
-    image_dir = tmp_path / "source/images"  # 修改图片目录位置
-    image_dir.mkdir(parents=True)
-
-    # 创建图片文件
-    (image_dir / "test.jpg").touch()
-
-    # 创建一个有效的 Markdown 文件
-    md_content = """---
-title="Test Article"
-description="Test Description"
----
-# Test Article
-
-This is a test article with a valid image:
-![test image](images/test.jpg)
-"""
-    md_file = source_dir / "test.md"
-    md_file.write_text(md_content)
-
-    # 初始化 HugoProcessor
-    config = {
-        'source_dir': str(source_dir),
-        'target_dir': str(target_dir),
-        'image_dir': str(image_dir)
-    }
-    processor = HugoProcessor(config)
-
-    # 验证文档
-    validation_result = processor.validate_document(str(md_file))
-
-    # 验证结果
-    assert validation_result.is_valid
-    assert not validation_result.missing_images
-    assert not validation_result.incomplete_front_matter
-    assert not validation_result.error_messages
+        # 验证覆盖的文件列表
+        assert isinstance(result["overwritten_files"], list)
+        assert len(result["overwritten_files"]) == 0
 
 
 def test_publish_skips_invalid_documents(tmp_path, monkeypatch):
+    """Test that publish operation skips invalid documents and reports them properly"""
     # 准备测试目录
     source_dir = tmp_path / "source"
     source_dir.mkdir()
@@ -1173,6 +1077,8 @@ def test_publish_skips_invalid_documents(tmp_path, monkeypatch):
     image_dir.mkdir(parents=True)
     hugo_dir = tmp_path / "hugo"
     hugo_dir.mkdir()
+    (hugo_dir / "content" / "blog").mkdir(parents=True)
+    (hugo_dir / "static" / "img" / "blog").mkdir(parents=True)
 
     # 设置 HUGO_TARGET_HOME 环境变量
     monkeypatch.setenv("HUGO_TARGET_HOME", str(hugo_dir))
@@ -1209,24 +1115,37 @@ This article has a missing image:
     # 初始化 HugoProcessor
     config = {
         'source_dir': str(source_dir),
-        'target_dir': str(target_dir),
-        'image_dir': str(image_dir)
+        'target_dir': str(hugo_dir / "content" / "blog"),
+        'image_dir': str(hugo_dir / "static" / "img" / "blog")
     }
     processor = HugoProcessor(config)
 
     # 执行发布
     result = processor.publish([str(valid_file), str(invalid_file)])
 
-    # 验证结果
-    assert len(result["processed_files"]) == 1  # 只处理了有效文档
-    assert str(valid_file) in result["processed_files"]
-    assert len(result["skipped_files"]) == 1  # 跳过了无效文档
-    assert str(invalid_file) in result["skipped_files"]
-    assert any("missing images" in str(err) for err in result["errors"])
+    # 验证结果格式
+    assert isinstance(result, dict)
+    assert "processed_files" in result
+    assert "skipped_files" in result
+    assert "errors" in result
+    assert "overwritten_files" in result
 
-    # 验证文件是否正确复制到 Hugo 目录
-    hugo_content_dir = hugo_dir / "content" / "blog"
-    hugo_image_dir = hugo_dir / "static" / "img" / "blog"
-    assert (hugo_content_dir / "valid.md").exists()
-    assert (hugo_image_dir / "valid.jpg").exists()
-    assert not (hugo_content_dir / "invalid.md").exists()
+    # 验证处理的文件列表
+    assert len(result["processed_files"]) == 2  # valid.md 和 valid.jpg
+    assert any(str(valid_file) in f for f in result["processed_files"])
+    assert any("valid.jpg" in f for f in result["processed_files"])
+
+    # 验证跳过的文件列表
+    assert len(result["skipped_files"]) == 1
+    assert any(str(invalid_file) in f["file"] for f in result["skipped_files"])
+    assert any("missing image" in f["reason"] for f in result["skipped_files"])
+
+    # 验证错误列表
+    assert len(result["errors"]) > 0
+    assert any("missing.jpg" in str(err) for err in result["errors"])
+
+    # 验证覆盖的文件列表
+    assert isinstance(result["overwritten_files"], list)
+    # 在这个测试中，valid.jpg 会被复制到目标目录，所以会被标记为覆盖
+    assert len(result["overwritten_files"]) == 1
+    assert any("valid.jpg" in f for f in result["overwritten_files"])

@@ -357,83 +357,96 @@ class HugoProcessor:
         target_file.write_text(content)
 
     def publish(self, files: List[str | Path] | None = None) -> Dict[str, Any]:
-        """发布 Markdown 文件到 Hugo 目录
+        """
+        Publish markdown files to Hugo directory.
 
         Args:
-            files: 要处理的文件列表，如果为 None 则处理源目录下的所有 Markdown 文件
+            files: List of markdown files to publish. If None, process all markdown files in source directory.
 
         Returns:
-            包含处理结果的字典：
-            - processed_files: 成功处理的文件列表
-            - skipped_files: 跳过的文件列表
-            - errors: 处理过程中的错误列表
-            - success: 是否全部成功处理
-
-        Raises:
-            ValueError: 如果 Hugo 环境验证失败
+            Dict containing:
+            - processed_files: List of successfully processed files
+            - skipped_files: List of skipped files with reasons
+            - errors: List of errors encountered
+            - overwritten_files: List of files that were overwritten
+            - success: Boolean indicating overall success
         """
         result = {
             "processed_files": [],
             "skipped_files": [],
             "errors": [],
-            "success": False
+            "overwritten_files": [],
+            "success": True
         }
 
         try:
-            # 验证 Hugo 环境
+            # Validate Hugo environment
             self.validate_hugo_environment()
 
-            # 如果没有指定文件，获取所有 Markdown 文件
+            # Get list of files to process
             if files is None:
                 source_path = Path(self.config['source_dir'])
-                files = [str(f) for f in source_path.glob('**/*.md')]
+                files = list(source_path.glob('**/*.md'))
+            else:
+                files = [Path(f) for f in files]
 
-            # 处理每个文件
+            # Process each file
             for file_path in files:
                 try:
-                    # 验证文档
+                    # Validate document
                     validation_result = self.validate_document(str(file_path))
                     if not validation_result.is_valid:
-                        result["skipped_files"].append(str(file_path))
+                        result["skipped_files"].append({
+                            "file": str(file_path),
+                            "reason": " | ".join(validation_result.error_messages)
+                        })
                         result["errors"].extend(
                             validation_result.error_messages)
                         continue
 
-                    # 处理有效文档
-                    md_path = Path(file_path)
+                    # Process the file
+                    processed_content = self.process_file(str(file_path))
 
-                    # 处理并更新 Markdown 文件
-                    processed_content = self.process_file(str(md_path))
-
-                    # 复制图片文件
-                    image_mapping = self.copy_article_images(md_path)
+                    # Copy images and update references
+                    image_mapping = self.copy_article_images(file_path)
                     if image_mapping:
-                        # 添加成功复制的图片路径
-                        for img_path in image_mapping.keys():
-                            full_img_path = md_path.parent / img_path
-                            result["processed_files"].append(
-                                str(full_img_path))
-                        # 更新图片引用
                         processed_content = self.update_image_references(
                             processed_content, image_mapping)
 
-                    # 复制 Markdown 文件
-                    self._copy_to_hugo_directory(md_path, processed_content)
-                    result["processed_files"].append(str(md_path))
+                    # Check if files will be overwritten
+                    hugo_home = Path(os.environ["HUGO_TARGET_HOME"])
+                    target_md_path = hugo_home / "content" / "blog" / file_path.name
+                    if target_md_path.exists():
+                        result["overwritten_files"].append(str(target_md_path))
+
+                    # Copy processed content to Hugo directory
+                    self._copy_to_hugo_directory(file_path, processed_content)
+                    result["processed_files"].append(str(file_path))
+
+                    # Add processed images to the list
+                    for img_path in image_mapping.keys():
+                        img_full_path = file_path.parent / img_path
+                        result["processed_files"].append(str(img_full_path))
+                        target_img_path = hugo_home / "static" / "img" / "blog" / img_full_path.name
+                        if target_img_path.exists():
+                            result["overwritten_files"].append(
+                                str(target_img_path))
 
                 except Exception as e:
-                    result["errors"].append(
-                        f"Error processing {file_path}: {str(e)}")
-                    result["skipped_files"].append(str(file_path))
+                    error_msg = f"Error processing {file_path}: {str(e)}"
+                    result["errors"].append(error_msg)
+                    result["skipped_files"].append({
+                        "file": str(file_path),
+                        "reason": error_msg
+                    })
 
-            # 设置成功标志
-            result["success"] = len(result["errors"]) == 0 and len(
-                result["processed_files"]) > 0
-
-        except ValueError as e:
-            result["errors"].append(str(e))
+        except Exception as e:
+            result["errors"].append(f"Global error: {str(e)}")
             result["success"] = False
-            raise  # Re-raise the ValueError for environment validation failures
+
+        # Set overall success status
+        if result["errors"] or result["skipped_files"]:
+            result["success"] = False
 
         return result
 
