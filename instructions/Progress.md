@@ -91,7 +91,12 @@
   - Integration with OpenRouter API using OpenAI SDK format
   - Proper error handling and retry mechanisms
   - Test coverage: 79%
-  - Integration tests (marked as skippable)
+  - Integration tests: ✅ All passing (5 tests)
+    - Title generation
+    - Subtitle generation
+    - Tag generation
+    - Category suggestion
+    - SEO keyword generation
 
 ## In Progress 🚧
 ### Hugo Operations - Publishing System
@@ -114,8 +119,8 @@
 ## Testing Status
 - Overall Status:
   - Total Tests: 137
-  - Passed: 130
-  - Skipped: 7 (Integration tests)
+  - Passed: 135
+  - Skipped: 2 (Integration tests requiring API keys)
   - Overall Coverage: 77%
 
 - Module Coverage:
@@ -126,7 +131,7 @@
   - `wx_htmler.py`: 96% ✅
   - `error_handler.py`: 88% ✅
   - `hugo_processor.py`: 77% 🚧
-  - `openrouter_service.py`: 79% 🚧
+  - `openrouter_service.py`: 79% ✅
   - `wx_publisher.py`: 79% 🚧
   - `md_file.py`: 80% 🚧
   - `wx_cache.py`: 73% 🚧
