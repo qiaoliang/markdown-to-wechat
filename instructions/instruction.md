@@ -176,6 +176,7 @@ The empty line removal functionality ensures markdown files maintain a clean and
    - Remove unnecessary empty lines at the start and end of the file
    - Preserve single empty lines between paragraphs
    - Preserve single empty lines before and after headers
+   - Files can optionally end with or without a newline character (`\n`)
 
 2. **Special Cases**:
    - **Code Blocks**: Preserve all empty lines within code blocks
